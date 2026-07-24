@@ -144,7 +144,9 @@ async def fetch_connection_list(username: str, connection_type: str = "followers
     """
     Fetch followers or following list via scraping_solutions no-cookies actor.
     connection_type: 'followers' or 'following'
-    Returns list of {username, full_name, profile_pic, is_verified, is_private}
+    Returns list of {username, full_name, profile_pic, is_verified, is_private}.
+    NOTE: only successful non-empty results are cached — errors/empty results
+    are not cached so users can retry immediately.
     """
     if connection_type not in ('followers', 'following'):
         raise ValueError("connection_type must be 'followers' or 'following'")
@@ -166,6 +168,7 @@ async def fetch_connection_list(username: str, connection_type: str = "followers
         )
     except HTTPException as e:
         logger.warning(f"Connection list fetch failed for @{username}/{connection_type}: {e.detail}")
+        # Do NOT cache errors — allow immediate retry
         return []
 
     results = []
@@ -181,5 +184,7 @@ async def fetch_connection_list(username: str, connection_type: str = "followers
             'is_private': item.get('is_private', False),
         })
 
-    _cache_set(cache_key, results)
+    # Only cache non-empty successful results
+    if results:
+        _cache_set(cache_key, results)
     return results

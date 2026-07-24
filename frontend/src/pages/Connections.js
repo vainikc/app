@@ -50,11 +50,19 @@ const Connections = () => {
       if (tab === 'followers') {
         const res = await axios.get(`${API}/profile/${selected}/followers-list?limit=100`);
         setFollowersData(res.data);
-        toast.success(`Loaded ${res.data.current.length} followers`);
+        if (res.data.quota_exhausted) {
+          toast.error('Apify daily quota reached — followers list unavailable until quota resets. Try again later.');
+        } else {
+          toast.success(`Loaded ${res.data.current.length} followers`);
+        }
       } else if (tab === 'following') {
         const res = await axios.get(`${API}/profile/${selected}/following-list?limit=100`);
         setFollowingData(res.data);
-        toast.success(`Loaded ${res.data.current.length} following`);
+        if (res.data.quota_exhausted) {
+          toast.error('Apify daily quota reached — following list unavailable until quota resets. Try again later.');
+        } else {
+          toast.success(`Loaded ${res.data.current.length} following`);
+        }
       } else if (tab === 'comments') {
         const res = await axios.get(`${API}/profile/${selected}/post-comments?posts_limit=3&comments_limit=25`);
         setCommentsData(res.data);
@@ -195,6 +203,19 @@ const Connections = () => {
 
 const ConnectionListView = ({ data, type }) => {
   const isFollowers = type === 'followers';
+
+  if (data.quota_exhausted) {
+    return (
+      <div className="card-vintage rounded-md p-12 text-center border-l-2 border-l-[#f59e0b]">
+        <div className="font-heading text-2xl text-[#f59e0b] mb-3">Apify Daily Quota Reached</div>
+        <p className="text-sm text-[#8a857e] max-w-md mx-auto">
+          The free-tier Apify actor for {isFollowers ? 'followers' : 'following'} lists is limited to a few runs per day.
+          Try again after 00:00 UTC when the quota resets, or upgrade your Apify plan for higher limits.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Diff summary cards */}

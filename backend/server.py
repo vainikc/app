@@ -228,22 +228,23 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
         added = list(current_set - prev_usernames)
         removed = list(prev_usernames - current_set)
 
-    # Save new snapshot
-    await db.connection_snapshots.insert_one({
-        "username": username,
-        "type": connection_type,
-        "usernames": current_usernames,
-        "count": len(current_usernames),
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    })
+    # Only save non-empty snapshots (avoid polluting DB with quota-exhausted empty results)
+    if current_usernames:
+        await db.connection_snapshots.insert_one({
+            "username": username,
+            "type": connection_type,
+            "usernames": current_usernames,
+            "count": len(current_usernames),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
 
-    # Build detail maps
     user_map = {c['username']: c for c in current_list if c.get('username')}
     return {
         "current": current_list,
         "added_details": [user_map.get(u, {"username": u}) for u in added],
         "removed_usernames": removed,
         "total_count": len(current_list),
+        "quota_exhausted": len(current_list) == 0,
     }
 
 
