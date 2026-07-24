@@ -217,15 +217,20 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
 
     - Newly added users are returned in current-list order → newest follow first.
     - `since_days=0` uses the most recent previous snapshot (last check).
+    - Uses profile-level counts (real total) alongside scraped list (may be capped at ~200).
     """
+    # Real total count from profile (uses cache)
+    profile = await fetch_profile(username)
+    profile_count_field = 'followers' if connection_type == 'followers' else 'following'
+    real_total = profile.get(profile_count_field, 0)
+
     current_list = await fetch_connection_list(username, connection_type, limit)
     current_usernames = [c['username'] for c in current_list if c.get('username')]
     quota_exhausted = len(current_list) == 0
 
-    # Find comparison snapshot
+    # Find comparison snapshot for FULL LIST diff
     if since_days > 0:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
-        # Get most recent snapshot ON OR BEFORE the cutoff
         old_snapshot = await db.connection_snapshots.find_one(
             {
                 "username": username,
@@ -236,6 +241,13 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
             sort=[("timestamp", -1)]
         )
         comparison_label = f"past {since_days} day{'s' if since_days != 1 else ''}"
+
+        # Also find count-based baseline from follower_snapshots (which is snapshotted every 6h by scheduler)
+        old_count_snapshot = await db.follower_snapshots.find_one(
+            {"username": username, "timestamp": {"$lte": cutoff}},
+            {"_id": 0},
+            sort=[("timestamp", -1)]
+        )
     else:
         old_snapshot = await db.connection_snapshots.find_one(
             {"username": username, "type": connection_type},
@@ -243,7 +255,13 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
             sort=[("timestamp", -1)]
         )
         comparison_label = "last check"
+        old_count_snapshot = await db.follower_snapshots.find_one(
+            {"username": username},
+            {"_id": 0},
+            sort=[("timestamp", -1)]
+        )
 
+    # Full-list diff (only works if we have a baseline snapshot with usernames)
     added_usernames = []
     removed_usernames = []
     if old_snapshot:
@@ -251,8 +269,14 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
         current_set = set(current_usernames)
         added_set = current_set - prev_usernames
         removed_usernames = list(prev_usernames - current_set)
-        # Preserve current-list order (recency) for added users
         added_usernames = [u for u in current_usernames if u in added_set]
+
+    # Count-based net change (always works if we have any follower_snapshot from the period)
+    net_change = None
+    baseline_count = None
+    if old_count_snapshot:
+        baseline_count = old_count_snapshot.get(profile_count_field, 0)
+        net_change = real_total - baseline_count
 
     # Only save non-empty snapshots
     if current_usernames:
@@ -266,19 +290,24 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
 
     user_map = {c['username']: c for c in current_list if c.get('username')}
 
-    # Build "most recent follows" (top N from current list - always available, no snapshot needed)
+    # Most recent = top of Instagram's list (reverse-chronological for 'following')
     most_recent = current_list[:20] if connection_type == 'following' else []
 
     return {
         "current": current_list,
-        "most_recent": most_recent,  # For "following": top 20 = most recently followed
+        "most_recent": most_recent,
         "added_details": [user_map.get(u, {"username": u}) for u in added_usernames],
         "removed_usernames": removed_usernames,
-        "total_count": len(current_list),
+        "profile_count": real_total,
+        "sample_count": len(current_list),
+        "total_count": real_total,
+        "net_change": net_change,
+        "baseline_count": baseline_count,
         "quota_exhausted": quota_exhausted,
         "comparison_period": comparison_label,
         "has_baseline": old_snapshot is not None,
-        "baseline_timestamp": old_snapshot.get('timestamp') if old_snapshot else None,
+        "has_count_baseline": old_count_snapshot is not None,
+        "baseline_timestamp": old_snapshot.get('timestamp') if old_snapshot else (old_count_snapshot.get('timestamp') if old_count_snapshot else None),
     }
 
 

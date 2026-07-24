@@ -245,8 +245,16 @@ const FollowingView = ({ data, timeRange }) => {
 
   const period = data.comparison_period;
   const hasBaseline = data.has_baseline;
+  const hasCountBaseline = data.has_count_baseline;
   const recentlyFollowed = data.added_details || [];
   const mostRecent = data.most_recent || [];
+  const netChange = data.net_change;
+  const profileCount = data.profile_count ?? data.total_count;
+  const sampleCount = data.sample_count ?? mostRecent.length;
+
+  // Format net change with sign, or "—" if unknown
+  const netAdded = netChange != null && netChange > 0 ? netChange : (hasBaseline ? recentlyFollowed.length : null);
+  const netLost = netChange != null && netChange < 0 ? Math.abs(netChange) : (hasBaseline ? (data.removed_usernames?.length || 0) : null);
 
   return (
     <>
@@ -254,39 +262,51 @@ const FollowingView = ({ data, timeRange }) => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <StatCard
           icon={UserCheck}
-          value={data.total_count}
+          value={profileCount?.toLocaleString() ?? '—'}
           label="Total Following"
           color="#d4a656"
           bg="#1a1613"
           border="#2a2622"
+          sublabel={sampleCount < profileCount ? `Showing ${sampleCount} of ${profileCount.toLocaleString()}` : null}
         />
         <StatCard
           icon={UserPlus}
-          value={`+${recentlyFollowed.length}`}
+          value={netAdded != null ? `+${netAdded}` : '—'}
           label={`Followed in ${period}`}
           color="#7d9c60"
           bg="#0f2211"
           border="#1e3e21"
+          sublabel={netAdded == null ? 'Need baseline data' : null}
         />
         <StatCard
           icon={UserMinus}
-          value={`-${data.removed_usernames?.length || 0}`}
+          value={netLost != null ? `-${netLost}` : '—'}
           label={`Unfollowed in ${period}`}
           color="#c15147"
           bg="#221010"
           border="#3e1e1e"
+          sublabel={netLost == null ? 'Need baseline data' : null}
         />
       </div>
 
       {/* Baseline warning */}
-      {!hasBaseline && (
+      {!hasBaseline && !hasCountBaseline && (
         <div className="card-vintage rounded-md p-4 mb-6 border-l-2 border-l-[#f59e0b]">
           <div className="flex items-start gap-3">
             <Clock className="w-4 h-4 text-[#f59e0b] mt-0.5 shrink-0" />
             <div className="text-xs text-[#c9c5be]">
-              <strong className="text-[#f59e0b]">First snapshot for {period}.</strong> Come back after {period} to see the diff — but the
-              "Most Recently Followed" section below is always live-accurate because Instagram
-              returns the following list in recency order.
+              <strong className="text-[#f59e0b]">No historical baseline for {period}.</strong> The scheduler snapshots every 6 hours, so after {period} the "Followed/Unfollowed" numbers will populate.
+              Meanwhile, the "Most Recently Followed" list below is always live-accurate — Instagram returns the following list newest-first.
+            </div>
+          </div>
+        </div>
+      )}
+      {!hasBaseline && hasCountBaseline && netChange != null && (
+        <div className="card-vintage rounded-md p-4 mb-6 border-l-2 border-l-[#d4a656]/60">
+          <div className="flex items-start gap-3">
+            <Info className="w-4 h-4 text-[#d4a656] mt-0.5 shrink-0" />
+            <div className="text-xs text-[#c9c5be]">
+              <strong className="text-[#d4a656]">Numeric baseline only.</strong> We know the count changed by {netChange > 0 ? `+${netChange}` : netChange} in the {period}, but the full-list baseline needed to identify <em>which</em> accounts were followed/unfollowed doesn't exist yet. Fetch again in {period.replace('past ', '')} to get named additions/removals.
             </div>
           </div>
         </div>
@@ -366,7 +386,7 @@ const FollowingView = ({ data, timeRange }) => {
       {/* Full list collapsed */}
       <details className="card-vintage rounded-md p-6">
         <summary className="cursor-pointer flex items-center justify-between text-[#c9c5be] hover:text-[#d4a656]">
-          <span className="font-heading text-xl font-semibold">All Following ({data.current.length})</span>
+          <span className="font-heading text-xl font-semibold">All Following ({data.current.length}{profileCount > data.current.length ? ` of ${profileCount.toLocaleString()}` : ''})</span>
           <span className="text-[10px] font-mono uppercase tracking-widest text-[#6b6660]">Click to expand</span>
         </summary>
         <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto pr-2">
@@ -385,12 +405,44 @@ const FollowersView = ({ data, timeRange }) => {
     return <QuotaExhausted type="followers" />;
   }
   const period = data.comparison_period;
+  const hasBaseline = data.has_baseline;
+  const netChange = data.net_change;
+  const profileCount = data.profile_count ?? data.total_count;
+  const sampleCount = data.sample_count ?? data.current.length;
+
+  const netAdded = netChange != null && netChange > 0 ? netChange : (hasBaseline ? (data.added_details?.length || 0) : null);
+  const netLost = netChange != null && netChange < 0 ? Math.abs(netChange) : (hasBaseline ? (data.removed_usernames?.length || 0) : null);
+
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard icon={Users} value={data.total_count} label="Current Followers" color="#d4a656" bg="#1a1613" border="#2a2622" />
-        <StatCard icon={UserPlus} value={`+${data.added_details?.length || 0}`} label={`New in ${period}`} color="#7d9c60" bg="#0f2211" border="#1e3e21" />
-        <StatCard icon={UserMinus} value={`-${data.removed_usernames?.length || 0}`} label={`Lost in ${period}`} color="#c15147" bg="#221010" border="#3e1e1e" />
+        <StatCard
+          icon={Users}
+          value={profileCount?.toLocaleString() ?? '—'}
+          label="Current Followers"
+          color="#d4a656"
+          bg="#1a1613"
+          border="#2a2622"
+          sublabel={sampleCount < profileCount ? `Showing ${sampleCount} of ${profileCount.toLocaleString()}` : null}
+        />
+        <StatCard
+          icon={UserPlus}
+          value={netAdded != null ? `+${netAdded}` : '—'}
+          label={`New in ${period}`}
+          color="#7d9c60"
+          bg="#0f2211"
+          border="#1e3e21"
+          sublabel={netAdded == null ? 'Need baseline data' : null}
+        />
+        <StatCard
+          icon={UserMinus}
+          value={netLost != null ? `-${netLost}` : '—'}
+          label={`Lost in ${period}`}
+          color="#c15147"
+          bg="#221010"
+          border="#3e1e1e"
+          sublabel={netLost == null ? 'Need baseline data' : null}
+        />
       </div>
 
       {data.added_details && data.added_details.length > 0 && (
@@ -425,7 +477,7 @@ const FollowersView = ({ data, timeRange }) => {
 
       <details className="card-vintage rounded-md p-6" open>
         <summary className="cursor-pointer flex items-center justify-between text-[#c9c5be] hover:text-[#d4a656]">
-          <span className="font-heading text-xl font-semibold">All Followers ({data.current.length})</span>
+          <span className="font-heading text-xl font-semibold">All Followers ({data.current.length}{profileCount > data.current.length ? ` of ${profileCount.toLocaleString()}` : ''})</span>
           <span className="text-[10px] font-mono uppercase tracking-widest text-[#6b6660]">Public sample</span>
         </summary>
         <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[600px] overflow-y-auto pr-2">
@@ -439,7 +491,7 @@ const FollowersView = ({ data, timeRange }) => {
 };
 
 
-const StatCard = ({ icon: Icon, value, label, color, bg, border }) => (
+const StatCard = ({ icon: Icon, value, label, color, bg, border, sublabel }) => (
   <div className="card-vintage rounded-md p-5">
     <div className="flex items-center justify-between mb-3">
       <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ background: bg, border: `1px solid ${border}` }}>
@@ -448,6 +500,9 @@ const StatCard = ({ icon: Icon, value, label, color, bg, border }) => (
     </div>
     <div className="font-mono text-3xl font-bold" style={{ color }}>{value}</div>
     <div className="text-[10px] font-mono uppercase tracking-widest text-[#6b6660] mt-1">{label}</div>
+    {sublabel && (
+      <div className="text-[10px] text-[#6b6660] mt-1 italic">{sublabel}</div>
+    )}
   </div>
 );
 
