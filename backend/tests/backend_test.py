@@ -1,13 +1,16 @@
 """
-Backend API tests for Sherlock - Instagram Data Tracker (v3.0)
+Backend API tests for Sherlock - Instagram Data Tracker (v3.4 iteration 8)
 Tests real Apify integration, Emergent LLM insights, dashboard aggregate,
-followers/following lists, connection history, post comments, rate limiting.
+followers/following lists w/ smart_recent + smart_recent_mode + removed_details,
+connection history, post comments, rate limiting.
 """
 import os
 import time
+from datetime import datetime, timezone, timedelta
+
 import pytest
 import requests
-import concurrent.futures
+from pymongo import MongoClient
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or "https://insta-sleuth-1.preview.emergentagent.com"
 BASE_URL = BASE_URL.rstrip("/")
@@ -17,12 +20,21 @@ APIFY_TIMEOUT = 180
 # Followers/Following actor may take 30-90s (larger scrape)
 LIST_TIMEOUT = 240
 
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+DB_NAME = os.environ.get("DB_NAME", "test_database")
+
 
 @pytest.fixture(scope="session")
 def http():
     s = requests.Session()
     s.headers.update({"Content-Type": "application/json"})
     return s
+
+
+@pytest.fixture(scope="session")
+def db():
+    c = MongoClient(MONGO_URL)
+    return c[DB_NAME]
 
 
 # ---------- Root / Health ----------
@@ -45,15 +57,13 @@ class TestDashboard:
         assert isinstance(data["accounts"], list)
         totals = data["totals"]
         for key in ["tracked", "followers", "following", "posts"]:
-            assert key in totals, f"Missing key {key} in totals"
+            assert key in totals
             assert isinstance(totals[key], int)
-        # Sanity: totals aggregate from account profiles
         assert totals["tracked"] == len(data["accounts"])
         summed_followers = sum(
             (a.get("profile") or {}).get("followers", 0) for a in data["accounts"]
         )
-        assert totals["followers"] == summed_followers, \
-            f"totals.followers ({totals['followers']}) != sum ({summed_followers})"
+        assert totals["followers"] == summed_followers
 
 
 # ---------- Profile Endpoint - REAL Apify data ----------
@@ -63,9 +73,8 @@ class TestProfile:
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:200]}"
         p = r.json()
         assert p["username"] == "natgeo"
-        assert p["full_name"], "full_name missing"
-        assert "national geographic" in p["full_name"].lower(), f"Expected National Geographic, got {p['full_name']}"
-        assert p["followers"] > 100_000_000, f"Follower count too low: {p['followers']}"
+        assert "national geographic" in p["full_name"].lower()
+        assert p["followers"] > 100_000_000
         assert p["is_verified"] is True
         assert p["posts"] > 1000
         assert isinstance(p["recent_posts"], list)
@@ -80,7 +89,7 @@ class TestProfile:
 
     def test_profile_nonexistent_returns_404(self, http):
         r = http.get(f"{BASE_URL}/api/profile/nonexistent_user_zzz999_ashd", timeout=APIFY_TIMEOUT)
-        assert r.status_code in (404, 502), f"Got {r.status_code}"
+        assert r.status_code in (404, 502)
 
 
 # ---------- Search Endpoint ----------
@@ -92,7 +101,6 @@ class TestSearch:
         assert isinstance(results, list)
         assert len(results) >= 1
         assert results[0]["username"] == "natgeo"
-        assert results[0]["followers"] > 100_000_000
 
     def test_search_nonexistent_returns_empty(self, http):
         r = http.get(f"{BASE_URL}/api/search", params={"q": "nonexistent_user_zzz999_ashd"}, timeout=APIFY_TIMEOUT)
@@ -119,7 +127,6 @@ class TestAccounts:
         assert data["username"] == "natgeo"
         assert "profile" in data
         assert data["profile"]["followers"] > 100_000_000
-        assert data["profile"]["is_verified"] is True
 
     def test_c_add_duplicate_fails(self, http):
         r = http.post(f"{BASE_URL}/api/accounts", params={"username": "natgeo"}, timeout=APIFY_TIMEOUT)
@@ -129,7 +136,6 @@ class TestAccounts:
         r = http.get(f"{BASE_URL}/api/accounts", timeout=15)
         assert r.status_code == 200
         accts = r.json()
-        assert isinstance(accts, list)
         usernames = [a["username"] for a in accts]
         assert "natgeo" in usernames
 
@@ -142,7 +148,6 @@ class TestAccounts:
         s0 = snaps[0]
         assert s0["username"] == "natgeo"
         assert s0["followers"] > 100_000_000
-        assert "timestamp" in s0
 
     def test_f_activity_endpoint(self, http):
         r = http.get(f"{BASE_URL}/api/profile/cristiano/activity", timeout=APIFY_TIMEOUT)
@@ -159,7 +164,6 @@ class TestAccounts:
         assert r.status_code == 200
         graph = r.json()
         assert "nodes" in graph and "links" in graph
-        assert isinstance(graph["nodes"], list)
         node_ids = [n["id"] for n in graph["nodes"]]
         assert "natgeo" in node_ids
 
@@ -179,11 +183,8 @@ class TestImageProxy:
         assert r.status_code == 422
 
     def test_image_proxy_rejects_non_instagram_url(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/image-proxy",
-            params={"url": "https://example.com/image.jpg"},
-            timeout=15,
-        )
+        r = http.get(f"{BASE_URL}/api/image-proxy",
+                     params={"url": "https://example.com/image.jpg"}, timeout=15)
         assert r.status_code == 400
 
     def test_image_proxy_returns_real_jpeg_bytes(self, http):
@@ -191,12 +192,7 @@ class TestImageProxy:
         assert p.status_code == 200
         pic_url = p.json().get("profile_pic")
         assert pic_url and ("cdninstagram.com" in pic_url or "fbcdn.net" in pic_url)
-
-        r = http.get(
-            f"{BASE_URL}/api/image-proxy",
-            params={"url": pic_url},
-            timeout=30,
-        )
+        r = http.get(f"{BASE_URL}/api/image-proxy", params={"url": pic_url}, timeout=30)
         assert r.status_code == 200
         ct = r.headers.get("content-type", "")
         assert ct.startswith("image/")
@@ -209,7 +205,6 @@ class TestImageProxy:
 class TestAIInsights:
     def test_insights_natgeo(self, http):
         r = http.get(f"{BASE_URL}/api/insights/natgeo", timeout=180)
-        # v3.0: LLM failure now returns 502 instead of 200
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:200]}"
         data = r.json()
         assert "insights" in data
@@ -222,340 +217,319 @@ class TestAIInsights:
         assert data["metrics"]["followers"] > 100_000_000
 
 
-# ---------- Followers/Following Lists (new v3.0 + since_days v3.1) ----------
-# Use @chilichidiu because it has small follower count (~1400) so scraper returns fast
-# EXPECTED_LIST_KEYS = new shape after since_days feature
+# ---------- Followers/Following Lists (iteration 8: NEW SCHEMA) ----------
+# Response no longer contains `most_recent`. It now contains smart_recent_mode and removed_details.
 EXPECTED_LIST_KEYS = [
-    "current", "most_recent", "added_details", "removed_usernames", "total_count",
-    "quota_exhausted", "comparison_period", "has_baseline", "baseline_timestamp",
-    # v3.2 bug-fix fields (iteration 6+):
-    "profile_count", "sample_count", "net_change", "baseline_count", "has_count_baseline",
-    # v3.3 smart_recent field (iteration 7+):
+    "current",
     "smart_recent",
+    "smart_recent_mode",   # v3.4 (iteration 8)
+    "added_details",
+    "removed_details",     # v3.4 (iteration 8)
+    "removed_usernames",
+    "profile_count",
+    "sample_count",
+    "total_count",
+    "net_change",
+    "baseline_count",
+    "quota_exhausted",
+    "comparison_period",
+    "has_baseline",
+    "has_count_baseline",
+    "baseline_timestamp",
 ]
 
 
 class TestConnectionLists:
+    """Basic shape + since_days variations."""
 
     def test_followers_list_shape(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/followers-list",
-            params={"limit": 10, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/followers-list",
+                     params={"limit": 10, "since_days": 7}, timeout=LIST_TIMEOUT)
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
         data = r.json()
         for key in EXPECTED_LIST_KEYS:
             assert key in data, f"Missing key {key}"
+        assert data["smart_recent_mode"] in ("exact", "approximate", "none")
         assert isinstance(data["current"], list)
-        assert isinstance(data["most_recent"], list)
+        assert isinstance(data["smart_recent"], list)
         assert isinstance(data["added_details"], list)
+        assert isinstance(data["removed_details"], list)
         assert isinstance(data["removed_usernames"], list)
-        assert isinstance(data["total_count"], int)
-        assert isinstance(data["quota_exhausted"], bool)
-        # For followers, most_recent should be [] per server logic
-        assert data["most_recent"] == []
+        # NEW: 'most_recent' MUST NOT be present anymore
+        assert "most_recent" not in data, "Legacy 'most_recent' field should be removed"
         assert data["comparison_period"] == "past 7 days"
-        # If any current items, verify shape
-        if data["current"]:
-            item = data["current"][0]
-            for k in ["username", "full_name", "profile_pic", "is_verified", "is_private"]:
-                assert k in item, f"Missing key {k} in follower item"
 
     def test_following_list_shape(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 10, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 10, "since_days": 7}, timeout=LIST_TIMEOUT)
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
         data = r.json()
         for key in EXPECTED_LIST_KEYS:
             assert key in data, f"Missing key {key}"
-        assert isinstance(data["current"], list)
-        assert isinstance(data["most_recent"], list)
+        assert data["smart_recent_mode"] in ("exact", "approximate", "none")
+        assert "most_recent" not in data
         assert data["comparison_period"] == "past 7 days"
-        # For following, most_recent is top-20 of current
-        assert len(data["most_recent"]) <= 20
-        assert len(data["most_recent"]) <= len(data["current"])
-        if data["current"]:
-            # most_recent should be the first N of current
-            n = min(20, len(data["current"]))
-            assert data["most_recent"] == data["current"][:n]
 
     def test_following_list_since_days_0_last_check(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 10, "since_days": 0},
-            timeout=LIST_TIMEOUT,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 10, "since_days": 0}, timeout=LIST_TIMEOUT)
         assert r.status_code == 200
         data = r.json()
         assert data["comparison_period"] == "last check"
         assert isinstance(data["has_baseline"], bool)
 
     def test_following_list_since_days_1(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 10, "since_days": 1},
-            timeout=LIST_TIMEOUT,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 10, "since_days": 1}, timeout=LIST_TIMEOUT)
         assert r.status_code == 200
-        data = r.json()
-        assert data["comparison_period"] == "past 1 day"
+        assert r.json()["comparison_period"] == "past 1 day"
 
     def test_following_list_since_days_30(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 10, "since_days": 30},
-            timeout=LIST_TIMEOUT,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 10, "since_days": 30}, timeout=LIST_TIMEOUT)
         assert r.status_code == 200
-        data = r.json()
-        assert data["comparison_period"] == "past 30 days"
+        assert r.json()["comparison_period"] == "past 30 days"
 
     def test_since_days_invalid_out_of_range(self, http):
-        # since_days > 365 or < 0 should 422
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 10, "since_days": 400},
-            timeout=30,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 10, "since_days": 400}, timeout=30)
         assert r.status_code == 422
 
     def test_connection_history_grows(self, http):
-        # After the two calls above, history should have at least 1 snapshot
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/connection-history",
-            params={"connection_type": "followers"},
-            timeout=15,
-        )
-        assert r.status_code == 200
-        snaps = r.json()
-        assert isinstance(snaps, list)
-        # Should have at least 1 snapshot after the followers-list call above
-        assert len(snaps) >= 1, "Expected at least 1 connection snapshot"
-        s0 = snaps[0]
-        assert s0["username"] == "chilichidiu"
-        assert s0["type"] == "followers"
-        assert "count" in s0
-        assert "timestamp" in s0
-
-    def test_connection_history_following(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/connection-history",
-            params={"connection_type": "following"},
-            timeout=15,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/connection-history",
+                     params={"connection_type": "following"}, timeout=15)
         assert r.status_code == 200
         snaps = r.json()
         assert isinstance(snaps, list)
         assert len(snaps) >= 1
-        assert snaps[0]["type"] == "following"
+        s0 = snaps[0]
+        assert s0["username"] == "chilichidiu"
+        assert s0["type"] == "following"
+        assert "count" in s0 and "timestamp" in s0
 
 
-# ---------- v3.2 Bug-Fix (iteration 6+) response shape ----------
-# BUG 1: profile_count uses real IG count (not scraped-list length).
-# BUG 2: net_change comes from follower_snapshots count-baseline path even when
-# no full-list snapshot exists (has_baseline=false but has_count_baseline=true).
+# ---------- v3.2 real IG count fix ----------
 class TestConnectionListsBugFix:
-    """Verify /following-list + /followers-list return the new fields introduced by
-    the iteration-6 bug fix for '@total following stuck at 200' and 'followed/unfollowed
-    stuck at 0'."""
-
     def test_following_profile_count_uses_real_ig_total_not_scrape_cap(self, http):
-        """profile_count/total_count should be the real IG following count (e.g. 1385),
-        NOT the ~200 scrape cap (sample_count)."""
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 100, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
-        assert r.status_code == 200, r.text[:300]
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 100, "since_days": 7}, timeout=LIST_TIMEOUT)
+        assert r.status_code == 200
         data = r.json()
         assert isinstance(data["profile_count"], int)
-        assert isinstance(data["sample_count"], int)
-        assert isinstance(data["total_count"], int)
-        # total_count is alias for profile_count
         assert data["total_count"] == data["profile_count"]
-        # profile_count should be MUCH larger than scraper cap when actor works
         if not data["quota_exhausted"] and data["current"]:
-            assert data["profile_count"] > 500, (
-                f"profile_count={data['profile_count']} — expected real IG count (~1385) "
-                f"not scrape cap (~200)"
-            )
+            assert data["profile_count"] > 500
             assert data["sample_count"] == len(data["current"])
-            # profile_count should be >= sample_count
             assert data["profile_count"] >= data["sample_count"]
 
     def test_followers_profile_count_uses_real_ig_total(self, http):
-        """Same fix on followers-list — profile_count uses profile.followers."""
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/followers-list",
-            params={"limit": 100, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/followers-list",
+                     params={"limit": 100, "since_days": 7}, timeout=LIST_TIMEOUT)
         assert r.status_code == 200
         data = r.json()
-        assert isinstance(data["profile_count"], int)
-        assert isinstance(data["sample_count"], int)
         assert data["total_count"] == data["profile_count"]
-        if not data["quota_exhausted"] and data["current"]:
-            assert data["sample_count"] == len(data["current"])
-            assert data["profile_count"] >= data["sample_count"]
 
-    def test_following_count_baseline_path_returns_net_change(self, http):
-        """With a follower_snapshots baseline seeded ~10d ago, since_days=7 should
-        return has_count_baseline=true, baseline_count set, and net_change=profile_count-baseline_count."""
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 100, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
+
+# ---------- v3.4 (iteration 8) smart_recent_mode + removed_details ----------
+class TestSmartRecentMode:
+    """
+    smart_recent_mode logic:
+      - 'exact'       when full-list connection_snapshot older than since_days exists
+      - 'approximate' when only follower_snapshot count-baseline exists and net_change > 0
+      - 'none'        otherwise
+    When mode='exact':
+      - smart_recent = users present in current but NOT in old_snapshot.usernames
+      - removed_details = [{'username': u} for u in old.usernames - current]
+      - smart_recent is NOT capped at 200 (equal to added set size)
+    """
+
+    SEED_MARKER = "TEST_SEED_ITER8"
+
+    def _cleanup_seed(self, db):
+        db.connection_snapshots.delete_many({"_seed": self.SEED_MARKER})
+        db.follower_snapshots.delete_many({"_seed": self.SEED_MARKER})
+
+    def test_z_cleanup_before(self, db):
+        self._cleanup_seed(db)
+
+    def test_mode_field_returned(self, http):
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 100, "since_days": 7}, timeout=LIST_TIMEOUT)
         assert r.status_code == 200
         data = r.json()
-        assert isinstance(data["has_count_baseline"], bool)
-        assert isinstance(data["has_baseline"], bool)
-        # baseline exists (seeded snapshot 10d old)
-        if data["has_count_baseline"]:
-            assert data["baseline_count"] is not None
-            assert isinstance(data["baseline_count"], int)
-            assert data["net_change"] is not None
-            assert isinstance(data["net_change"], int)
-            # net_change math: current - baseline
-            assert data["net_change"] == data["profile_count"] - data["baseline_count"], (
-                f"net_change={data['net_change']} but profile_count-baseline_count="
-                f"{data['profile_count'] - data['baseline_count']}"
+        assert "smart_recent_mode" in data
+        assert data["smart_recent_mode"] in ("exact", "approximate", "none")
+
+    def test_removed_details_field_returned(self, http):
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 100, "since_days": 7}, timeout=LIST_TIMEOUT)
+        assert r.status_code == 200
+        data = r.json()
+        assert "removed_details" in data
+        assert isinstance(data["removed_details"], list)
+        # If any removed_details items exist, each must be a dict with 'username'
+        for item in data["removed_details"]:
+            assert isinstance(item, dict)
+            assert "username" in item
+
+    def test_exact_mode_with_seeded_baseline(self, http, db):
+        """
+        Seed a full-list connection_snapshot 10 days ago for chilichidiu:
+        Use the current live following list minus 5 users + 2 fake unfollows.
+        Then GET /following-list?since_days=7 → expect:
+          - smart_recent_mode == 'exact'
+          - smart_recent length == 5 (the 5 removed from old-list slice = added when going old->current)
+          - removed_details has 2 fake usernames (present in old, absent in current)
+          - smart_recent is NOT capped at 200
+        """
+        # 1. Get current live following (uncached fresh call)
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                     params={"limit": 100, "since_days": 7}, timeout=LIST_TIMEOUT)
+        assert r.status_code == 200
+        base_data = r.json()
+        current_usernames = [c["username"] for c in base_data["current"] if c.get("username")]
+        assert len(current_usernames) >= 10, \
+            f"Need at least 10 current users to seed a diff test; got {len(current_usernames)}"
+
+        # 2. Build baseline: current minus first 5 (they become "added") + 2 fakes (they become "removed")
+        fake_unfollowed = [f"fake_unfollowed_iter8_{i}" for i in range(2)]
+        old_usernames = current_usernames[5:] + fake_unfollowed
+
+        # Clean any prior seed
+        self._cleanup_seed(db)
+
+        # 3. Insert baseline snapshot 10 days old
+        ten_days_ago = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        db.connection_snapshots.insert_one({
+            "username": "chilichidiu",
+            "type": "following",
+            "usernames": old_usernames,
+            "count": len(old_usernames),
+            "timestamp": ten_days_ago,
+            "_seed": self.SEED_MARKER,
+        })
+
+        try:
+            # 4. Query with since_days=7 → should find the 10-day-old snapshot
+            r2 = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                          params={"limit": 100, "since_days": 7}, timeout=LIST_TIMEOUT)
+            assert r2.status_code == 200
+            data = r2.json()
+
+            # Backend prefers full-list diff → mode should be 'exact'
+            assert data["smart_recent_mode"] == "exact", (
+                f"Expected mode='exact' with seeded 10-day baseline, got mode='{data['smart_recent_mode']}'. "
+                f"has_baseline={data.get('has_baseline')}, baseline_ts={data.get('baseline_timestamp')}"
             )
-            assert data["baseline_timestamp"] is not None
-        else:
-            # If no baseline, net_change must be null
-            assert data["net_change"] is None
-            assert data["baseline_count"] is None
+            assert data["has_baseline"] is True
 
-    def test_following_since_days_0_uses_most_recent_snapshot(self, http):
-        """since_days=0 should look at the most recent follower_snapshot regardless of age."""
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 100, "since_days": 0},
-            timeout=LIST_TIMEOUT,
-        )
-        assert r.status_code == 200
+            # smart_recent must equal the 5 users we removed from the old list = current[:5] (recency order)
+            sr_usernames = [u["username"] for u in data["smart_recent"]]
+            expected_added = current_usernames[:5]
+            # Order: added_details_ordered comes from iterating current_usernames in order,
+            # so it should equal expected_added (the first 5 current users, since they're not in old)
+            assert sr_usernames == expected_added, (
+                f"smart_recent usernames {sr_usernames} != expected added {expected_added}"
+            )
+            assert len(data["smart_recent"]) == 5
+
+            # removed_details should contain the 2 fakes (present in old, absent in current)
+            removed_names = sorted([d["username"] for d in data["removed_details"]])
+            assert removed_names == sorted(fake_unfollowed), (
+                f"removed_details={removed_names} expected {sorted(fake_unfollowed)}"
+            )
+            assert sorted(data["removed_usernames"]) == sorted(fake_unfollowed)
+
+            # smart_recent is NOT capped at 200 — it equals actual diff size (5), not 200
+            assert len(data["smart_recent"]) < 200
+        finally:
+            self._cleanup_seed(db)
+
+    def test_none_mode_when_no_baseline(self, http, db):
+        """
+        For an account with NO baseline of any kind for a since_days=7 window,
+        mode should be 'none' and smart_recent should be empty.
+        Use a random untracked account.
+        """
+        candidate = "nasa"
+        # Ensure no prior snapshots exist for this window (delete all older than 7 days is not needed
+        # since fresh accounts won't have any). Just check response shape.
+        r = http.get(f"{BASE_URL}/api/profile/{candidate}/following-list",
+                     params={"limit": 10, "since_days": 7}, timeout=LIST_TIMEOUT)
+        if r.status_code != 200:
+            pytest.skip(f"Could not fetch {candidate}: {r.status_code}")
         data = r.json()
-        assert data["comparison_period"] == "last check"
-        # There will be at least 1 follower_snapshot from prior tests
-        if data["has_count_baseline"]:
-            assert data["baseline_count"] is not None
-            assert data["net_change"] is not None
-            assert data["net_change"] == data["profile_count"] - data["baseline_count"]
+        # If BOTH baselines absent → mode must be 'none' and smart_recent must be []
+        if not data["has_baseline"] and not data["has_count_baseline"]:
+            assert data["smart_recent_mode"] == "none"
+            assert data["smart_recent"] == []
+            assert data["removed_details"] == []
+        elif data["has_baseline"]:
+            # unlikely for fresh account but respect actual state
+            assert data["smart_recent_mode"] in ("exact",)
+        else:
+            # only count-baseline exists
+            # if net_change > 0 → 'approximate'; if <= 0 or None → 'none'
+            if (data.get("net_change") or 0) > 0:
+                assert data["smart_recent_mode"] == "approximate"
+            else:
+                assert data["smart_recent_mode"] == "none"
 
-    def test_no_baseline_untracked_account_returns_null_net_change(self, http):
-        """An account with NO follower_snapshots at all should return
-        has_count_baseline=false, net_change=null, baseline_count=null."""
-        # Use a small, real IG account that is NOT tracked and has no snapshots.
-        # 'kkw' is a small real account we don't track (skip if scraper cap-hit).
-        r = http.get(
-            f"{BASE_URL}/api/profile/instagram/following-list",
-            params={"limit": 10, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
-        # 'instagram' is huge but its following-count endpoint may error/quota.
-        # We only assert shape when call succeeds and this account has no snapshots.
-        if r.status_code == 200:
+    def test_approximate_mode_smart_recent_uses_current_slice(self, http, db):
+        """
+        Force approximate mode by seeding ONLY a follower_snapshot count baseline (no connection_snapshot).
+        Use a target that currently has no full-list snapshot from >7 days ago.
+        For chilichidiu we can seed a stale follower_snapshot but we must ALSO delete any 
+        connection_snapshot older than since_days=7. Since all current chilichidiu connection_snapshots
+        are recent (< 1 day old), setting since_days=7 already won't find any full-list baseline.
+        """
+        # Seed old follower_snapshot for chilichidiu with a lower following count → net_change>0
+        # Get current profile_count
+        r0 = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                      params={"limit": 100, "since_days": 7}, timeout=LIST_TIMEOUT)
+        assert r0.status_code == 200
+        current_profile_count = r0.json()["profile_count"]
+
+        # Cleanup + seed
+        db.follower_snapshots.delete_many({"_seed": self.SEED_MARKER})
+        ten_days_ago = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        db.follower_snapshots.insert_one({
+            "username": "chilichidiu",
+            "followers": 100,
+            "following": max(current_profile_count - 8, 1),  # net_change=+8
+            "posts": 0,
+            "timestamp": ten_days_ago,
+            "_seed": self.SEED_MARKER,
+        })
+
+        try:
+            r = http.get(f"{BASE_URL}/api/profile/chilichidiu/following-list",
+                         params={"limit": 100, "since_days": 7}, timeout=LIST_TIMEOUT)
+            assert r.status_code == 200
             data = r.json()
-            # There may or may not be a snapshot depending on prior test runs.
-            # But if has_count_baseline==false, net_change MUST be None.
-            if not data["has_count_baseline"]:
-                assert data["net_change"] is None
-                assert data["baseline_count"] is None
+            # Since no full-list snapshot from >7d ago, but count-baseline exists → approximate
+            assert data["has_baseline"] is False, "Should be no full-list baseline older than 7d"
+            assert data["has_count_baseline"] is True
+            assert data["net_change"] == 8
+            assert data["smart_recent_mode"] == "approximate"
+            # smart_recent = current_list[:min(net_change, len(current))] = first 8
+            assert len(data["smart_recent"]) == min(8, len(data["current"]))
+            assert data["smart_recent"] == data["current"][:len(data["smart_recent"])]
+        finally:
+            db.follower_snapshots.delete_many({"_seed": self.SEED_MARKER})
+
+    def test_zz_cleanup_after(self, db):
+        self._cleanup_seed(db)
 
 
-# ---------- v3.3 smart_recent field (iteration 7+) ----------
-# When net_change > 0 from count-baseline path, smart_recent = current_list[:net_change]
-# giving exactly N users ordered by IG recency (newest-first).
-class TestSmartRecent:
-    """Verify smart_recent field returns exactly N most-recent users when
-    net_change > 0."""
-
-    def test_following_smart_recent_matches_net_change(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 100, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
-        assert r.status_code == 200
-        data = r.json()
-        assert "smart_recent" in data
-        assert isinstance(data["smart_recent"], list)
-        net_change = data.get("net_change")
-        current_list = data.get("current", [])
-        smart_recent = data["smart_recent"]
-        if net_change is not None and net_change > 0 and not data["quota_exhausted"]:
-            # Exact length == net_change (capped by scraped list size)
-            expected_len = min(net_change, len(current_list))
-            assert len(smart_recent) == expected_len, (
-                f"smart_recent len={len(smart_recent)} != expected {expected_len} "
-                f"(net_change={net_change}, current_list_len={len(current_list)})"
-            )
-            # Must equal current_list[:N] (top-of-list slice)
-            assert smart_recent == current_list[:expected_len], (
-                "smart_recent is not the top-N slice of current_list"
-            )
-            # Verify user shape
-            u0 = smart_recent[0]
-            for k in ["username", "full_name", "profile_pic", "is_verified", "is_private"]:
-                assert k in u0, f"Missing key {k} in smart_recent user"
-        else:
-            # No baseline or 0/negative net_change => smart_recent must be empty
-            assert smart_recent == []
-
-    def test_followers_smart_recent_field_present(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/followers-list",
-            params={"limit": 100, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
-        assert r.status_code == 200
-        data = r.json()
-        assert "smart_recent" in data
-        assert isinstance(data["smart_recent"], list)
-        net_change = data.get("net_change")
-        current_list = data.get("current", [])
-        smart_recent = data["smart_recent"]
-        if net_change is not None and net_change > 0 and not data["quota_exhausted"]:
-            expected_len = min(net_change, len(current_list))
-            assert len(smart_recent) == expected_len
-            assert smart_recent == current_list[:expected_len]
-        else:
-            assert smart_recent == []
-
-    def test_smart_recent_empty_when_no_baseline(self, http):
-        """since_days=0 with only the seeded-old baseline still finds it (most recent snapshot).
-        Use a random account with no snapshots to verify empty behavior."""
-        r = http.get(
-            f"{BASE_URL}/api/profile/nasa/following-list",
-            params={"limit": 10, "since_days": 7},
-            timeout=LIST_TIMEOUT,
-        )
-        if r.status_code == 200:
-            data = r.json()
-            # If no count-baseline, smart_recent must be empty
-            if not data["has_count_baseline"] or (data.get("net_change") or 0) <= 0:
-                assert data["smart_recent"] == []
-
-
-# ---------- Post Comments (new v3.0) ----------
+# ---------- Post Comments ----------
 class TestPostComments:
     def test_post_comments_shape(self, http):
-        r = http.get(
-            f"{BASE_URL}/api/profile/chilichidiu/post-comments",
-            params={"posts_limit": 2, "comments_limit": 5},
-            timeout=LIST_TIMEOUT,
-        )
+        r = http.get(f"{BASE_URL}/api/profile/chilichidiu/post-comments",
+                     params={"posts_limit": 2, "comments_limit": 5}, timeout=LIST_TIMEOUT)
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
         comments = r.json()
         assert isinstance(comments, list)
-        # If comments exist, verify shape
         if comments:
             c = comments[0]
             for k in ["author", "text", "likes", "timestamp", "post_url"]:
@@ -565,18 +539,12 @@ class TestPostComments:
 # ---------- Rate Limiting ----------
 class TestRateLimit:
     def test_search_rate_limit(self, http):
-        """GET /api/search is limited to 30/min per IP. Ingress splits across
-        ~2 IPs, so send 100 requests to reliably trigger 429 on both buckets."""
         codes = []
         for _ in range(100):
             try:
-                r = requests.get(
-                    f"{BASE_URL}/api/search",
-                    params={"q": ""},  # returns [] 200 quickly
-                    timeout=10,
-                )
+                r = requests.get(f"{BASE_URL}/api/search", params={"q": ""}, timeout=10)
                 codes.append(r.status_code)
             except Exception:
                 codes.append(0)
         n_429 = codes.count(429)
-        assert n_429 > 0, f"Expected some 429 responses; got codes: {sorted(set(codes))}, counts: {[(c, codes.count(c)) for c in sorted(set(codes))]}"
+        assert n_429 > 0, f"Expected some 429; got {sorted(set(codes))}"

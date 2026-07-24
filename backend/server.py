@@ -290,25 +290,36 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
 
     user_map = {c['username']: c for c in current_list if c.get('username')}
 
-    # Most recent = top of Instagram's list (reverse-chronological for 'following')
-    most_recent = current_list[:20] if connection_type == 'following' else []
+    # Removed users' details (use the OLD snapshot to look them up if possible)
+    removed_details = []
+    if old_snapshot and removed_usernames:
+        # Old snapshot only has usernames array, no profile info. Just return usernames.
+        removed_details = [{"username": u} for u in removed_usernames]
 
-    # Smart-scoped list: only show the N newest users where N = numeric count-diff
-    # Since Instagram returns following list newest-first, current_list[:N] are exactly
-    # the N users followed in the period. Works even without a full-list baseline.
+    # ===== smart_recent: the list of exact accounts followed in the period =====
+    # Precedence:
+    # 1. FULL-LIST baseline exists → use added_details (EXACT diff, correct membership).
+    # 2. Only COUNT baseline exists → use current_list[:net_change] as a recency-based proxy.
+    # 3. No baseline → empty; UI will show "no baseline yet" message.
+    added_details_ordered = [user_map.get(u, {"username": u}) for u in added_usernames]
+
     smart_recent = []
-    if connection_type == 'following' and net_change is not None and net_change > 0:
+    smart_recent_mode = "none"
+    if old_snapshot and added_usernames:
+        # Exact — from full-list snapshot diff
+        smart_recent = added_details_ordered
+        smart_recent_mode = "exact"
+    elif net_change is not None and net_change > 0:
+        # Approximate — count-diff × recency ordering
         smart_recent = current_list[:min(net_change, len(current_list))]
-    elif connection_type == 'followers' and net_change is not None and net_change > 0:
-        # Followers list ordering isn't guaranteed reverse-chronological by IG, but
-        # top-of-list is still the best public proxy for "recent"
-        smart_recent = current_list[:min(net_change, len(current_list))]
+        smart_recent_mode = "approximate"
 
     return {
         "current": current_list,
-        "most_recent": most_recent,
         "smart_recent": smart_recent,
-        "added_details": [user_map.get(u, {"username": u}) for u in added_usernames],
+        "smart_recent_mode": smart_recent_mode,  # "exact" | "approximate" | "none"
+        "added_details": added_details_ordered,
+        "removed_details": removed_details,
         "removed_usernames": removed_usernames,
         "profile_count": real_total,
         "sample_count": len(current_list),

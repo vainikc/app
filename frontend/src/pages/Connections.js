@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UserPlus, UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, MessageSquare, Heart, Clock, Sparkles } from 'lucide-react';
+import { UserPlus, UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, MessageSquare, Heart, Clock, Sparkles, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -45,9 +45,9 @@ const Connections = () => {
   }, []);
 
   useEffect(() => {
-    // Clear previous data when switching account or time range
     setFollowersData(null);
     setFollowingData(null);
+    setCommentsData(null);
   }, [selected, timeRange]);
 
   const fetchAccounts = async () => {
@@ -66,16 +66,13 @@ const Connections = () => {
         const res = await axios.get(`${API}/profile/${selected}/followers-list?limit=100&since_days=${timeRange}`);
         setFollowersData(res.data);
         if (res.data.quota_exhausted) toast.error('Apify quota exhausted');
-        else toast.success(`Loaded followers`);
       } else if (tab === 'following') {
         const res = await axios.get(`${API}/profile/${selected}/following-list?limit=100&since_days=${timeRange}`);
         setFollowingData(res.data);
         if (res.data.quota_exhausted) toast.error('Apify quota exhausted');
-        else toast.success(`Loaded following`);
       } else if (tab === 'comments') {
         const res = await axios.get(`${API}/profile/${selected}/post-comments?posts_limit=3&comments_limit=25`);
         setCommentsData(res.data);
-        toast.success(`${res.data.length} comments`);
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to fetch');
@@ -85,12 +82,13 @@ const Connections = () => {
 
   const tabs = [
     { id: 'following', label: 'Recently followed', icon: UserCheck },
-    { id: 'followers', label: 'Followers', icon: Users },
+    { id: 'followers', label: 'New followers', icon: Users },
     { id: 'comments', label: 'Comments on posts', icon: MessageSquare },
   ];
 
   const currentData = tab === 'followers' ? followersData : tab === 'following' ? followingData : commentsData;
   const showTimeRange = tab === 'followers' || tab === 'following';
+  const periodLabel = TIME_RANGES.find(r => r.value === timeRange)?.label.toLowerCase() || 'past week';
 
   return (
     <div className="p-10 max-w-[1600px]">
@@ -99,7 +97,7 @@ const Connections = () => {
           Connections
         </h1>
         <p className="text-[15px] text-[#a1a1aa] max-w-2xl leading-relaxed">
-          Who they've recently followed, who follows them, and public comments on their posts.
+          Who joined or left in a chosen time window. Only accounts within the range are shown.
         </p>
       </div>
 
@@ -110,7 +108,6 @@ const Connections = () => {
         </div>
       ) : (
         <>
-          {/* Controls */}
           <div className="card-modern rounded-lg p-5 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="md:col-span-2">
@@ -148,7 +145,7 @@ const Connections = () => {
             </div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-[#525252] flex-1 min-w-[300px]">
-                Instagram returns following newest-first · Fetch takes 30–90s
+                Instagram returns following list newest-first · Fetch takes 30–90s
               </p>
               <Button
                 data-testid="fetch-connections-btn"
@@ -162,7 +159,6 @@ const Connections = () => {
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="flex gap-2 mb-6 flex-wrap">
             {tabs.map((t) => {
               const Icon = t.icon;
@@ -185,18 +181,18 @@ const Connections = () => {
             })}
           </div>
 
-          {/* Disclaimer */}
           <div className="card-modern rounded-lg p-3.5 mb-6 border-l-2 border-l-[#dc2626]/50">
             <div className="flex items-start gap-3">
               <Info className="w-3.5 h-3.5 text-[#dc2626]/80 mt-0.5 shrink-0" />
               <div className="text-xs text-[#a1a1aa]">
-                Instagram doesn't publicly expose: (1) comments this user made on <em>other</em> posts, or
-                (2) posts they've liked. Everything shown below is real, live, and public.
+                Instagram doesn't publicly expose two things — no scraper on Earth can retrieve them:
+                (1) posts a user has <em>liked</em> (removed by Meta in Oct 2019),
+                (2) comments they've made on <em>other</em> people's posts (no reverse index).
+                Everything below is real and public.
               </div>
             </div>
           </div>
 
-          {/* Content */}
           {loading ? (
             <div className="card-modern rounded-lg p-16 text-center text-[#a1a1aa]">
               <RefreshCw className="w-5 h-5 mx-auto mb-3 animate-spin" />
@@ -206,13 +202,13 @@ const Connections = () => {
             <div className="card-modern rounded-lg p-16 text-center">
               <div className="text-lg text-white mb-2">No data yet</div>
               <p className="text-sm text-[#a1a1aa]">
-                Click <span className="text-white">Fetch live data</span> to pull the {tab === 'comments' ? 'comments' : `${tab} list`}.
+                Click <span className="text-white">Fetch live data</span> to inspect @{selected} for the {periodLabel}.
               </p>
             </div>
           ) : tab === 'following' ? (
-            <FollowingView data={currentData} />
+            <FollowingView data={currentData} period={periodLabel} />
           ) : tab === 'followers' ? (
-            <FollowersView data={currentData} />
+            <FollowersView data={currentData} period={periodLabel} />
           ) : (
             <CommentsView comments={currentData} />
           )}
@@ -223,95 +219,87 @@ const Connections = () => {
 };
 
 
-const BaselineBanner = ({ hasBaseline, hasCountBaseline, netChange, period, smartRecentCount }) => {
-  if (!hasBaseline && !hasCountBaseline) {
-    return (
-      <div className="card-modern rounded-lg p-3.5 mb-4 border-l-2 border-l-[#f59e0b]/70">
-        <div className="flex items-start gap-3">
-          <Clock className="w-3.5 h-3.5 text-[#f59e0b] mt-0.5 shrink-0" />
-          <div className="text-xs text-[#d4d4d8]">
-            <strong className="text-[#f59e0b]">No baseline for {period}.</strong>{' '}
-            The scheduler snapshots every 6h — come back later. Meanwhile the recency-ordered list below is always live.
-          </div>
-        </div>
+const NoBaselinePanel = ({ period, netChange }) => (
+  <div className="card-modern rounded-lg p-8 mb-6">
+    <div className="flex items-start gap-4">
+      <div className="w-10 h-10 rounded-md bg-[#141414] border border-[#1f1f1f] flex items-center justify-center shrink-0">
+        <Clock className="w-4 h-4 text-[#a1a1aa]" strokeWidth={1.75} />
       </div>
-    );
-  }
-  if (!hasBaseline && hasCountBaseline && netChange != null) {
-    const capped = smartRecentCount != null && smartRecentCount < Math.abs(netChange);
-    return (
-      <div className="card-modern rounded-lg p-3.5 mb-4 border-l-2 border-l-white/40">
-        <div className="flex items-start gap-3">
-          <Sparkles className="w-3.5 h-3.5 text-white mt-0.5 shrink-0" />
-          <div className="text-xs text-[#d4d4d8]">
-            <strong className="text-white">Smart-scoped list.</strong>{' '}
-            {capped ? (
-              <>
-                {Math.abs(netChange)} {netChange > 0 ? 'new follows' : 'unfollows'} happened in the {period}.
-                Instagram's public API caps the scrape at 200, so we're showing the {smartRecentCount} most recent —
-                the rest can be surfaced once the scheduler builds a full-list baseline.
-              </>
-            ) : (
-              <>
-                We know {Math.abs(netChange)} new {netChange > 0 ? 'follows' : 'unfollows'} happened in the {period},
-                so we've narrowed the scrape to exactly those {Math.abs(netChange)} accounts using Instagram's recency ordering.
-              </>
-            )}
+      <div className="flex-1">
+        <h3 className="text-lg font-semibold text-white mb-2">Waiting on a baseline</h3>
+        <p className="text-sm text-[#a1a1aa] leading-relaxed mb-3">
+          Sherlock started tracking this account too recently to know who was followed exactly in the {period}.
+          The scheduler snapshots the account every 6 hours — come back after {period} has elapsed for exact answers.
+        </p>
+        {netChange != null && (
+          <div className="text-xs text-[#737373] font-mono">
+            Numeric change since we started tracking: {netChange > 0 ? '+' : ''}{netChange}
           </div>
-        </div>
+        )}
       </div>
-    );
-  }
-  return null;
-};
+    </div>
+  </div>
+);
 
 
-const FollowingView = ({ data }) => {
+const ApproximateWarning = ({ period, netChange, smartRecentCount }) => (
+  <div className="card-modern rounded-lg p-3.5 mb-4 border-l-2 border-l-[#f59e0b]/70">
+    <div className="flex items-start gap-3">
+      <AlertTriangle className="w-3.5 h-3.5 text-[#f59e0b] mt-0.5 shrink-0" />
+      <div className="text-xs text-[#d4d4d8]">
+        <strong className="text-[#f59e0b]">Approximate — no full-list baseline yet.</strong>{' '}
+        We know the count changed by {netChange > 0 ? '+' : ''}{netChange} in the {period}.
+        Since Instagram returns the list newest-first, we're showing the {smartRecentCount} most recent as a best-effort proxy.
+        Exact identification requires a full-list snapshot from that period (built automatically every 6h).
+      </div>
+    </div>
+  </div>
+);
+
+
+const FollowingView = ({ data, period }) => {
   if (data.quota_exhausted) return <QuotaExhausted type="following" />;
 
-  const period = data.comparison_period;
-  const hasBaseline = data.has_baseline;
-  const hasCountBaseline = data.has_count_baseline;
-  const netChange = data.net_change;
-  const profileCount = data.profile_count ?? data.total_count;
-  const sampleCount = data.sample_count ?? 0;
+  const profileCount = data.profile_count ?? 0;
   const smartRecent = data.smart_recent || [];
-  const mostRecent = data.most_recent || [];
   const removedUsernames = data.removed_usernames || [];
+  const mode = data.smart_recent_mode; // "exact" | "approximate" | "none"
 
-  const netAdded = netChange != null && netChange > 0 ? netChange : (hasBaseline ? (data.added_details?.length || 0) : null);
-  const netLost = netChange != null && netChange < 0 ? Math.abs(netChange) : (hasBaseline ? removedUsernames.length : null);
+  const followedCount = mode === "exact" ? smartRecent.length : (data.net_change > 0 ? data.net_change : 0);
+  const unfollowedCount = mode === "exact"
+    ? removedUsernames.length
+    : (data.net_change != null && data.net_change < 0 ? Math.abs(data.net_change) : 0);
 
   return (
     <>
-      {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-        <StatCard label="Total following" value={profileCount?.toLocaleString() ?? '—'} sublabel={sampleCount < profileCount ? `Scraped ${sampleCount} of ${profileCount.toLocaleString()}` : null} />
-        <StatCard label={`Followed in ${period}`} value={netAdded != null ? `+${netAdded}` : '—'} tone="pos" sublabel={netAdded == null ? 'Need baseline' : null} />
-        <StatCard label={`Unfollowed in ${period}`} value={netLost != null ? `-${netLost}` : '—'} tone="neg" sublabel={netLost == null ? 'Need baseline' : null} />
+        <StatCard label="Total following" value={profileCount.toLocaleString()} />
+        <StatCard label={`Followed in ${period}`} value={`+${followedCount}`} tone="pos" />
+        <StatCard label={`Unfollowed in ${period}`} value={`-${unfollowedCount}`} tone="neg" />
       </div>
 
-      <BaselineBanner hasBaseline={hasBaseline} hasCountBaseline={hasCountBaseline} netChange={netChange} period={period} smartRecentCount={smartRecent.length} />
+      {mode === "none" && (
+        <NoBaselinePanel period={period} netChange={data.net_change} />
+      )}
 
-      {/* SMART SCOPED - the killer feature */}
+      {mode === "approximate" && smartRecent.length > 0 && (
+        <ApproximateWarning period={period} netChange={data.net_change} smartRecentCount={smartRecent.length} />
+      )}
+
       {smartRecent.length > 0 && (
         <div className="card-modern-hi rounded-lg p-6 mb-4">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-white" />
-                {smartRecent.length === netChange
-                  ? `${smartRecent.length} accounts followed in the ${period}`
-                  : `Top ${smartRecent.length} of ${netChange} accounts followed in the ${period}`}
+                {smartRecent.length} account{smartRecent.length === 1 ? '' : 's'} followed in the {period}
               </h3>
               <p className="text-xs text-[#737373] mt-0.5">
-                {smartRecent.length === netChange
-                  ? 'Ordered by recency — position #1 is most recent'
-                  : `Scraper capped at 200 · showing the most-recent ${smartRecent.length} of ${netChange}`}
+                {mode === "exact" ? "Exact — from full-list diff" : "Best-effort — recency-ordered slice"}
               </p>
             </div>
-            <span className="text-xs text-white bg-white/10 px-2.5 py-1 rounded font-mono">
-              {smartRecent.length} NEW
+            <span className="text-[10px] text-white bg-white/10 px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+              {mode}
             </span>
           </div>
           <div className="space-y-1.5">
@@ -322,22 +310,6 @@ const FollowingView = ({ data }) => {
         </div>
       )}
 
-      {/* Full-list diff added (only when hasBaseline) */}
-      {hasBaseline && (data.added_details || []).length > 0 && smartRecent.length === 0 && (
-        <div className="card-modern-hi rounded-lg p-6 mb-4">
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <UserPlus className="w-4 h-4 text-[#22c55e]" />
-            New in the {period}
-          </h3>
-          <div className="space-y-1.5">
-            {data.added_details.map((u, idx) => (
-              <UserRow key={u.username || idx} user={u} index={idx + 1} highlight="new" />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Unfollowed */}
       {removedUsernames.length > 0 && (
         <div className="card-modern rounded-lg p-6 mb-4 border-l-2 border-l-[#dc2626]/50">
           <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -354,73 +326,45 @@ const FollowingView = ({ data }) => {
         </div>
       )}
 
-      {/* Most Recently Followed (fallback when no smart_recent) */}
-      {smartRecent.length === 0 && (
-        <div className="card-modern rounded-lg p-6 mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Clock className="w-4 h-4 text-white" />
-                Most recently followed
-              </h3>
-              <p className="text-xs text-[#737373] mt-0.5">Top of Instagram's list — always fresh</p>
-            </div>
-            <span className="text-xs text-[#737373]">Top {mostRecent.length}</span>
-          </div>
-          {mostRecent.length === 0 ? (
-            <p className="text-sm text-[#737373]">No data.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {mostRecent.map((u, idx) => (
-                <UserRow key={u.username || idx} user={u} index={idx + 1} />
-              ))}
-            </div>
-          )}
+      {mode === "exact" && smartRecent.length === 0 && removedUsernames.length === 0 && (
+        <div className="card-modern rounded-lg p-12 text-center">
+          <div className="text-lg text-white mb-2">No changes in the {period}</div>
+          <p className="text-sm text-[#a1a1aa]">@{data.username || 'this account'} hasn't followed or unfollowed anyone in this window.</p>
         </div>
       )}
-
-      {/* Collapsed full list */}
-      <details className="card-modern rounded-lg p-5">
-        <summary className="cursor-pointer flex items-center justify-between text-white hover:text-[#e5e5e5] list-none">
-          <span className="text-sm font-medium">
-            All following ({sampleCount}{profileCount > sampleCount ? ` of ${profileCount.toLocaleString()}` : ''})
-          </span>
-          <span className="text-xs text-[#737373]">Expand</span>
-        </summary>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[500px] overflow-y-auto pr-2">
-          {data.current.map((u) => (
-            <UserCard key={u.username} user={u} />
-          ))}
-        </div>
-      </details>
     </>
   );
 };
 
 
-const FollowersView = ({ data }) => {
+const FollowersView = ({ data, period }) => {
   if (data.quota_exhausted) return <QuotaExhausted type="followers" />;
 
-  const period = data.comparison_period;
-  const hasBaseline = data.has_baseline;
-  const hasCountBaseline = data.has_count_baseline;
-  const netChange = data.net_change;
-  const profileCount = data.profile_count ?? data.total_count;
-  const sampleCount = data.sample_count ?? data.current.length;
+  const profileCount = data.profile_count ?? 0;
   const smartRecent = data.smart_recent || [];
+  const removedUsernames = data.removed_usernames || [];
+  const mode = data.smart_recent_mode;
 
-  const netAdded = netChange != null && netChange > 0 ? netChange : (hasBaseline ? (data.added_details?.length || 0) : null);
-  const netLost = netChange != null && netChange < 0 ? Math.abs(netChange) : (hasBaseline ? (data.removed_usernames?.length || 0) : null);
+  const gainedCount = mode === "exact" ? smartRecent.length : (data.net_change > 0 ? data.net_change : 0);
+  const lostCount = mode === "exact"
+    ? removedUsernames.length
+    : (data.net_change != null && data.net_change < 0 ? Math.abs(data.net_change) : 0);
 
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-        <StatCard label="Current followers" value={profileCount?.toLocaleString() ?? '—'} sublabel={sampleCount < profileCount ? `Scraped ${sampleCount} of ${profileCount.toLocaleString()}` : null} />
-        <StatCard label={`New in ${period}`} value={netAdded != null ? `+${netAdded}` : '—'} tone="pos" sublabel={netAdded == null ? 'Need baseline' : null} />
-        <StatCard label={`Lost in ${period}`} value={netLost != null ? `-${netLost}` : '—'} tone="neg" sublabel={netLost == null ? 'Need baseline' : null} />
+        <StatCard label="Total followers" value={profileCount.toLocaleString()} />
+        <StatCard label={`New in ${period}`} value={`+${gainedCount}`} tone="pos" />
+        <StatCard label={`Lost in ${period}`} value={`-${lostCount}`} tone="neg" />
       </div>
 
-      <BaselineBanner hasBaseline={hasBaseline} hasCountBaseline={hasCountBaseline} netChange={netChange} period={period} smartRecentCount={smartRecent.length} />
+      {mode === "none" && (
+        <NoBaselinePanel period={period} netChange={data.net_change} />
+      )}
+
+      {mode === "approximate" && smartRecent.length > 0 && (
+        <ApproximateWarning period={period} netChange={data.net_change} smartRecentCount={smartRecent.length} />
+      )}
 
       {smartRecent.length > 0 && (
         <div className="card-modern-hi rounded-lg p-6 mb-4">
@@ -428,12 +372,14 @@ const FollowersView = ({ data }) => {
             <div>
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Sparkles className="w-4 h-4" />
-                {smartRecent.length} new followers in the {period}
+                {smartRecent.length} new follower{smartRecent.length === 1 ? '' : 's'} in the {period}
               </h3>
-              <p className="text-xs text-[#737373] mt-0.5">Scraper narrowed to the {smartRecent.length} most recent</p>
+              <p className="text-xs text-[#737373] mt-0.5">
+                {mode === "exact" ? "Exact — from full-list diff" : "Best-effort — most recent slice"}
+              </p>
             </div>
-            <span className="text-xs text-white bg-white/10 px-2.5 py-1 rounded font-mono">
-              {smartRecent.length} NEW
+            <span className="text-[10px] text-white bg-white/10 px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+              {mode}
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -444,14 +390,14 @@ const FollowersView = ({ data }) => {
         </div>
       )}
 
-      {data.removed_usernames && data.removed_usernames.length > 0 && (
+      {removedUsernames.length > 0 && (
         <div className="card-modern rounded-lg p-6 mb-4 border-l-2 border-l-[#dc2626]/50">
           <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <UserMinus className="w-4 h-4 text-[#dc2626]" />
             Lost in the {period}
           </h3>
           <div className="flex flex-wrap gap-1.5">
-            {data.removed_usernames.map((u) => (
+            {removedUsernames.map((u) => (
               <a key={u} href={`https://www.instagram.com/${u}/`} target="_blank" rel="noopener noreferrer" className="font-mono text-xs text-[#dc2626] hover:text-[#f87171] px-2.5 py-1 bg-[#1a0a0a] border border-[#3a1010] rounded">
                 @{u}
               </a>
@@ -460,19 +406,12 @@ const FollowersView = ({ data }) => {
         </div>
       )}
 
-      <details className="card-modern rounded-lg p-5" open>
-        <summary className="cursor-pointer flex items-center justify-between text-white hover:text-[#e5e5e5] list-none">
-          <span className="text-sm font-medium">
-            All followers ({sampleCount}{profileCount > sampleCount ? ` of ${profileCount.toLocaleString()}` : ''})
-          </span>
-          <span className="text-xs text-[#737373]">Public sample</span>
-        </summary>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[600px] overflow-y-auto pr-2">
-          {data.current.map((u) => (
-            <UserCard key={u.username} user={u} />
-          ))}
+      {mode === "exact" && smartRecent.length === 0 && removedUsernames.length === 0 && (
+        <div className="card-modern rounded-lg p-12 text-center">
+          <div className="text-lg text-white mb-2">No changes in the {period}</div>
+          <p className="text-sm text-[#a1a1aa]">Followers stayed the same in this window.</p>
         </div>
-      </details>
+      )}
     </>
   );
 };
@@ -495,7 +434,7 @@ const UserRow = ({ user, index, highlight }) => (
     href={`https://www.instagram.com/${user.username}/`}
     target="_blank"
     rel="noopener noreferrer"
-    className={`flex items-center gap-3 px-3 py-2 rounded-md border transition-colors group ${
+    className={`flex items-center gap-3 px-3 py-2 rounded-md border transition-colors ${
       highlight === 'new'
         ? 'bg-[#0a0a0a] border-white/10 hover:border-white/30'
         : 'bg-transparent border-transparent hover:bg-[#0a0a0a] hover:border-[#1f1f1f]'
@@ -568,7 +507,7 @@ const QuotaExhausted = ({ type }) => (
   <div className="card-modern rounded-lg p-12 text-center border-l-2 border-l-[#f59e0b]/70">
     <div className="text-lg font-semibold text-[#f59e0b] mb-2">Apify quota reached</div>
     <p className="text-sm text-[#a1a1aa] max-w-md mx-auto">
-      Free tier caps {type} lists at ~200/day per user. Try again after 00:00 UTC or upgrade your plan.
+      Free tier caps {type} lists at ~200/day per user. Try again after 00:00 UTC or upgrade your Apify plan.
     </p>
   </div>
 );
