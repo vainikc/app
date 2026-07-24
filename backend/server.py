@@ -229,6 +229,7 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
     quota_exhausted = len(current_list) == 0
 
     # Find comparison snapshot for FULL LIST diff
+    baseline_scope = "none"  # "exact" | "partial" (younger than requested window) | "none"
     if since_days > 0:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
         old_snapshot = await db.connection_snapshots.find_one(
@@ -240,20 +241,38 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
             {"_id": 0},
             sort=[("timestamp", -1)]
         )
-        comparison_label = f"past {since_days} day{'s' if since_days != 1 else ''}"
-
-        # Also find count-based baseline from follower_snapshots (which is snapshotted every 6h by scheduler)
+        if old_snapshot:
+            baseline_scope = "exact"
         old_count_snapshot = await db.follower_snapshots.find_one(
             {"username": username, "timestamp": {"$lte": cutoff}},
             {"_id": 0},
             sort=[("timestamp", -1)]
         )
+
+        # Fallback: no snapshot older than cutoff → use EARLIEST snapshot we have (partial baseline).
+        if not old_snapshot:
+            old_snapshot = await db.connection_snapshots.find_one(
+                {"username": username, "type": connection_type},
+                {"_id": 0},
+                sort=[("timestamp", 1)]  # earliest
+            )
+            if old_snapshot:
+                baseline_scope = "partial"
+        if not old_count_snapshot:
+            old_count_snapshot = await db.follower_snapshots.find_one(
+                {"username": username},
+                {"_id": 0},
+                sort=[("timestamp", 1)]
+            )
+        comparison_label = f"past {since_days} day{'s' if since_days != 1 else ''}"
     else:
         old_snapshot = await db.connection_snapshots.find_one(
             {"username": username, "type": connection_type},
             {"_id": 0},
             sort=[("timestamp", -1)]
         )
+        if old_snapshot:
+            baseline_scope = "exact"
         comparison_label = "last check"
         old_count_snapshot = await db.follower_snapshots.find_one(
             {"username": username},
@@ -298,26 +317,33 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
 
     # ===== smart_recent: the list of exact accounts followed in the period =====
     # Precedence:
-    # 1. FULL-LIST baseline exists → use added_details (EXACT diff, correct membership).
-    # 2. Only COUNT baseline exists → use current_list[:net_change] as a recency-based proxy.
-    # 3. No baseline → empty; UI will show "no baseline yet" message.
+    # 1. FULL-LIST baseline covering full window → "exact".
+    # 2. FULL-LIST baseline younger than window → "partial" (exact diff, but shorter tracking span).
+    # 3. Only COUNT baseline → "approximate" (recency-ordered slice of current list).
+    # 4. No baseline at all → "heuristic" (top slice of IG's newest-first list, small).
     added_details_ordered = [user_map.get(u, {"username": u}) for u in added_usernames]
 
     smart_recent = []
     smart_recent_mode = "none"
     if old_snapshot and added_usernames:
-        # Exact — from full-list snapshot diff
         smart_recent = added_details_ordered
-        smart_recent_mode = "exact"
+        smart_recent_mode = "exact" if baseline_scope == "exact" else "partial"
     elif net_change is not None and net_change > 0:
         # Approximate — count-diff × recency ordering
         smart_recent = current_list[:min(net_change, len(current_list))]
         smart_recent_mode = "approximate"
+    elif since_days > 0 and current_list:
+        # Heuristic — no baseline at all. Instagram returns list newest-first, so top slice
+        # is our best guess for "recently followed". Size scales with requested window.
+        slice_size = min(max(since_days * 3, 10), 30)
+        smart_recent = current_list[:min(slice_size, len(current_list))]
+        smart_recent_mode = "heuristic"
 
     return {
         "current": current_list,
         "smart_recent": smart_recent,
-        "smart_recent_mode": smart_recent_mode,  # "exact" | "approximate" | "none"
+        "smart_recent_mode": smart_recent_mode,  # "exact" | "partial" | "approximate" | "heuristic" | "none"
+        "baseline_scope": baseline_scope,  # "exact" | "partial" | "none"
         "added_details": added_details_ordered,
         "removed_details": removed_details,
         "removed_usernames": removed_usernames,

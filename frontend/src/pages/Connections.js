@@ -257,16 +257,51 @@ const ApproximateWarning = ({ period, netChange, smartRecentCount }) => (
 );
 
 
+const PartialBaselineWarning = ({ period, baselineTimestamp }) => {
+  const ageHours = baselineTimestamp
+    ? Math.max(1, Math.floor((Date.now() - new Date(baselineTimestamp).getTime()) / 3600000))
+    : null;
+  return (
+    <div className="card-modern rounded-lg p-3.5 mb-4 border-l-2 border-l-[#f59e0b]/70">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="w-3.5 h-3.5 text-[#f59e0b] mt-0.5 shrink-0" />
+        <div className="text-xs text-[#d4d4d8]">
+          <strong className="text-[#f59e0b]">Partial baseline.</strong>{' '}
+          We've only been tracking this account for ~{ageHours}h, so we can't cover the full {period} yet.
+          Showing exact changes since we started tracking. Keep coming back — the picture will fill in.
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+const HeuristicWarning = ({ period, smartRecentCount }) => (
+  <div className="card-modern rounded-lg p-3.5 mb-4 border-l-2 border-l-[#f59e0b]/70">
+    <div className="flex items-start gap-3">
+      <AlertTriangle className="w-3.5 h-3.5 text-[#f59e0b] mt-0.5 shrink-0" />
+      <div className="text-xs text-[#d4d4d8]">
+        <strong className="text-[#f59e0b]">Best-effort — no historical baseline.</strong>{' '}
+        Instagram returns the list in reverse-chronological order (newest follows first).
+        We're showing the top {smartRecentCount} entries as a proxy for "recently followed in the {period}".
+        Exact diffs kick in automatically once we've been tracking for {period}.
+      </div>
+    </div>
+  </div>
+);
+
+
 const FollowingView = ({ data, period }) => {
   if (data.quota_exhausted) return <QuotaExhausted type="following" />;
 
   const profileCount = data.profile_count ?? 0;
   const smartRecent = data.smart_recent || [];
   const removedUsernames = data.removed_usernames || [];
-  const mode = data.smart_recent_mode; // "exact" | "approximate" | "none"
+  const mode = data.smart_recent_mode; // "exact" | "partial" | "approximate" | "heuristic" | "none"
+  const isExactish = mode === "exact" || mode === "partial";
 
-  const followedCount = mode === "exact" ? smartRecent.length : (data.net_change > 0 ? data.net_change : 0);
-  const unfollowedCount = mode === "exact"
+  const followedCount = isExactish ? smartRecent.length : (data.net_change > 0 ? data.net_change : smartRecent.length);
+  const unfollowedCount = isExactish
     ? removedUsernames.length
     : (data.net_change != null && data.net_change < 0 ? Math.abs(data.net_change) : 0);
 
@@ -281,9 +316,14 @@ const FollowingView = ({ data, period }) => {
       {mode === "none" && (
         <NoBaselinePanel period={period} netChange={data.net_change} />
       )}
-
+      {mode === "partial" && (
+        <PartialBaselineWarning period={period} baselineTimestamp={data.baseline_timestamp} />
+      )}
       {mode === "approximate" && smartRecent.length > 0 && (
         <ApproximateWarning period={period} netChange={data.net_change} smartRecentCount={smartRecent.length} />
+      )}
+      {mode === "heuristic" && smartRecent.length > 0 && (
+        <HeuristicWarning period={period} smartRecentCount={smartRecent.length} />
       )}
 
       {smartRecent.length > 0 && (
@@ -295,7 +335,10 @@ const FollowingView = ({ data, period }) => {
                 {smartRecent.length} account{smartRecent.length === 1 ? '' : 's'} followed in the {period}
               </h3>
               <p className="text-xs text-[#737373] mt-0.5">
-                {mode === "exact" ? "Exact — from full-list diff" : "Best-effort — recency-ordered slice"}
+                {mode === "exact" && "Exact — from full-list diff"}
+                {mode === "partial" && "Exact — but only since we started tracking"}
+                {mode === "approximate" && "Best-effort — recency-ordered slice"}
+                {mode === "heuristic" && "Best-effort — Instagram's newest-first ordering"}
               </p>
             </div>
             <span className="text-[10px] text-white bg-white/10 px-2 py-0.5 rounded font-mono uppercase tracking-wider">
@@ -326,7 +369,7 @@ const FollowingView = ({ data, period }) => {
         </div>
       )}
 
-      {mode === "exact" && smartRecent.length === 0 && removedUsernames.length === 0 && (
+      {isExactish && smartRecent.length === 0 && removedUsernames.length === 0 && (
         <div className="card-modern rounded-lg p-12 text-center">
           <div className="text-lg text-white mb-2">No changes in the {period}</div>
           <p className="text-sm text-[#a1a1aa]">@{data.username || 'this account'} hasn't followed or unfollowed anyone in this window.</p>
@@ -344,9 +387,10 @@ const FollowersView = ({ data, period }) => {
   const smartRecent = data.smart_recent || [];
   const removedUsernames = data.removed_usernames || [];
   const mode = data.smart_recent_mode;
+  const isExactish = mode === "exact" || mode === "partial";
 
-  const gainedCount = mode === "exact" ? smartRecent.length : (data.net_change > 0 ? data.net_change : 0);
-  const lostCount = mode === "exact"
+  const gainedCount = isExactish ? smartRecent.length : (data.net_change > 0 ? data.net_change : smartRecent.length);
+  const lostCount = isExactish
     ? removedUsernames.length
     : (data.net_change != null && data.net_change < 0 ? Math.abs(data.net_change) : 0);
 
@@ -361,9 +405,14 @@ const FollowersView = ({ data, period }) => {
       {mode === "none" && (
         <NoBaselinePanel period={period} netChange={data.net_change} />
       )}
-
+      {mode === "partial" && (
+        <PartialBaselineWarning period={period} baselineTimestamp={data.baseline_timestamp} />
+      )}
       {mode === "approximate" && smartRecent.length > 0 && (
         <ApproximateWarning period={period} netChange={data.net_change} smartRecentCount={smartRecent.length} />
+      )}
+      {mode === "heuristic" && smartRecent.length > 0 && (
+        <HeuristicWarning period={period} smartRecentCount={smartRecent.length} />
       )}
 
       {smartRecent.length > 0 && (
@@ -375,7 +424,10 @@ const FollowersView = ({ data, period }) => {
                 {smartRecent.length} new follower{smartRecent.length === 1 ? '' : 's'} in the {period}
               </h3>
               <p className="text-xs text-[#737373] mt-0.5">
-                {mode === "exact" ? "Exact — from full-list diff" : "Best-effort — most recent slice"}
+                {mode === "exact" && "Exact — from full-list diff"}
+                {mode === "partial" && "Exact — but only since we started tracking"}
+                {mode === "approximate" && "Best-effort — most recent slice"}
+                {mode === "heuristic" && "Best-effort — Instagram's newest-first ordering"}
               </p>
             </div>
             <span className="text-[10px] text-white bg-white/10 px-2 py-0.5 rounded font-mono uppercase tracking-wider">
@@ -406,7 +458,7 @@ const FollowersView = ({ data, period }) => {
         </div>
       )}
 
-      {mode === "exact" && smartRecent.length === 0 && removedUsernames.length === 0 && (
+      {(mode === "exact" || mode === "partial") && smartRecent.length === 0 && removedUsernames.length === 0 && (
         <div className="card-modern rounded-lg p-12 text-center">
           <div className="text-lg text-white mb-2">No changes in the {period}</div>
           <p className="text-sm text-[#a1a1aa]">Followers stayed the same in this window.</p>
