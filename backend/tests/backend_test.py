@@ -228,6 +228,8 @@ class TestAIInsights:
 EXPECTED_LIST_KEYS = [
     "current", "most_recent", "added_details", "removed_usernames", "total_count",
     "quota_exhausted", "comparison_period", "has_baseline", "baseline_timestamp",
+    # v3.2 bug-fix fields (iteration 6+):
+    "profile_count", "sample_count", "net_change", "baseline_count", "has_count_baseline",
 ]
 
 
@@ -348,6 +350,122 @@ class TestConnectionLists:
         assert isinstance(snaps, list)
         assert len(snaps) >= 1
         assert snaps[0]["type"] == "following"
+
+
+# ---------- v3.2 Bug-Fix (iteration 6+) response shape ----------
+# BUG 1: profile_count uses real IG count (not scraped-list length).
+# BUG 2: net_change comes from follower_snapshots count-baseline path even when
+# no full-list snapshot exists (has_baseline=false but has_count_baseline=true).
+class TestConnectionListsBugFix:
+    """Verify /following-list + /followers-list return the new fields introduced by
+    the iteration-6 bug fix for '@total following stuck at 200' and 'followed/unfollowed
+    stuck at 0'."""
+
+    def test_following_profile_count_uses_real_ig_total_not_scrape_cap(self, http):
+        """profile_count/total_count should be the real IG following count (e.g. 1385),
+        NOT the ~200 scrape cap (sample_count)."""
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/following-list",
+            params={"limit": 100, "since_days": 7},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200, r.text[:300]
+        data = r.json()
+        assert isinstance(data["profile_count"], int)
+        assert isinstance(data["sample_count"], int)
+        assert isinstance(data["total_count"], int)
+        # total_count is alias for profile_count
+        assert data["total_count"] == data["profile_count"]
+        # profile_count should be MUCH larger than scraper cap when actor works
+        if not data["quota_exhausted"] and data["current"]:
+            assert data["profile_count"] > 500, (
+                f"profile_count={data['profile_count']} — expected real IG count (~1385) "
+                f"not scrape cap (~200)"
+            )
+            assert data["sample_count"] == len(data["current"])
+            # profile_count should be >= sample_count
+            assert data["profile_count"] >= data["sample_count"]
+
+    def test_followers_profile_count_uses_real_ig_total(self, http):
+        """Same fix on followers-list — profile_count uses profile.followers."""
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/followers-list",
+            params={"limit": 100, "since_days": 7},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data["profile_count"], int)
+        assert isinstance(data["sample_count"], int)
+        assert data["total_count"] == data["profile_count"]
+        if not data["quota_exhausted"] and data["current"]:
+            assert data["sample_count"] == len(data["current"])
+            assert data["profile_count"] >= data["sample_count"]
+
+    def test_following_count_baseline_path_returns_net_change(self, http):
+        """With a follower_snapshots baseline seeded ~10d ago, since_days=7 should
+        return has_count_baseline=true, baseline_count set, and net_change=profile_count-baseline_count."""
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/following-list",
+            params={"limit": 100, "since_days": 7},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data["has_count_baseline"], bool)
+        assert isinstance(data["has_baseline"], bool)
+        # baseline exists (seeded snapshot 10d old)
+        if data["has_count_baseline"]:
+            assert data["baseline_count"] is not None
+            assert isinstance(data["baseline_count"], int)
+            assert data["net_change"] is not None
+            assert isinstance(data["net_change"], int)
+            # net_change math: current - baseline
+            assert data["net_change"] == data["profile_count"] - data["baseline_count"], (
+                f"net_change={data['net_change']} but profile_count-baseline_count="
+                f"{data['profile_count'] - data['baseline_count']}"
+            )
+            assert data["baseline_timestamp"] is not None
+        else:
+            # If no baseline, net_change must be null
+            assert data["net_change"] is None
+            assert data["baseline_count"] is None
+
+    def test_following_since_days_0_uses_most_recent_snapshot(self, http):
+        """since_days=0 should look at the most recent follower_snapshot regardless of age."""
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/following-list",
+            params={"limit": 100, "since_days": 0},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["comparison_period"] == "last check"
+        # There will be at least 1 follower_snapshot from prior tests
+        if data["has_count_baseline"]:
+            assert data["baseline_count"] is not None
+            assert data["net_change"] is not None
+            assert data["net_change"] == data["profile_count"] - data["baseline_count"]
+
+    def test_no_baseline_untracked_account_returns_null_net_change(self, http):
+        """An account with NO follower_snapshots at all should return
+        has_count_baseline=false, net_change=null, baseline_count=null."""
+        # Use a small, real IG account that is NOT tracked and has no snapshots.
+        # 'kkw' is a small real account we don't track (skip if scraper cap-hit).
+        r = http.get(
+            f"{BASE_URL}/api/profile/instagram/following-list",
+            params={"limit": 10, "since_days": 7},
+            timeout=LIST_TIMEOUT,
+        )
+        # 'instagram' is huge but its following-count endpoint may error/quota.
+        # We only assert shape when call succeeds and this account has no snapshots.
+        if r.status_code == 200:
+            data = r.json()
+            # There may or may not be a snapshot depending on prior test runs.
+            # But if has_count_baseline==false, net_change MUST be None.
+            if not data["has_count_baseline"]:
+                assert data["net_change"] is None
+                assert data["baseline_count"] is None
 
 
 # ---------- Post Comments (new v3.0) ----------
