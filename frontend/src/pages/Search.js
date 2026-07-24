@@ -48,7 +48,7 @@ const Search = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10">
-        <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3">
+        <div className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3 inline-block pl-6">
           Reconnaissance
         </div>
         <h1 className="font-heading text-5xl sm:text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2">
@@ -58,7 +58,7 @@ const Search = () => {
         <div className="divider-ornate mt-6 max-w-md"></div>
       </div>
 
-      <div className="card-detective rounded-md p-6 mb-8">
+      <div className="card-vintage rounded-md p-6 mb-8">
         <div className="flex gap-3">
           <div className="relative flex-1">
             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b6660]" />
@@ -84,13 +84,13 @@ const Search = () => {
       </div>
 
       {loading && (
-        <div className="card-detective rounded-md p-12 text-center text-[#6b6660]">
+        <div className="card-vintage rounded-md p-12 text-center text-[#6b6660]">
           Fetching live profile data from Instagram...
         </div>
       )}
 
       {!loading && searched && results.length === 0 && (
-        <div className="card-detective rounded-md p-12 text-center">
+        <div className="card-vintage rounded-md p-12 text-center">
           <div className="font-heading text-2xl text-[#8a857e]">No trace found.</div>
           <p className="text-sm text-[#6b6660] mt-2">Try an exact Instagram username.</p>
         </div>
@@ -101,7 +101,7 @@ const Search = () => {
           <div
             key={profile.username}
             data-testid={`search-result-${profile.username}`}
-            className="card-detective rounded-md p-6 animate-fade-in-up"
+            className="card-vintage rounded-md p-6 animate-fade-in-up"
           >
             <div className="flex items-start gap-4 mb-5">
               {profile.profile_pic ? (

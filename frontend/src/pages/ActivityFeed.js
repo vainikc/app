@@ -69,7 +69,7 @@ const ActivityFeed = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10">
-        <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3">
+        <div className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3 inline-block pl-6">
           Surveillance Log
         </div>
         <h1 className="font-heading text-5xl sm:text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2">
@@ -80,16 +80,16 @@ const ActivityFeed = () => {
       </div>
 
       {loading ? (
-        <div className="card-detective rounded-md p-12 text-center text-[#6b6660]">
+        <div className="card-vintage rounded-md p-12 text-center text-[#6b6660]">
           Loading activity...
         </div>
       ) : trackedAccounts.length === 0 ? (
-        <div className="card-detective rounded-md p-12 text-center">
+        <div className="card-vintage rounded-md p-12 text-center">
           <div className="font-heading text-2xl text-[#8a857e]">Nothing to observe.</div>
           <p className="text-sm text-[#6b6660] mt-2">Track a profile to see activity here.</p>
         </div>
       ) : allActivities.length === 0 ? (
-        <div className="card-detective rounded-md p-12 text-center text-[#6b6660]">
+        <div className="card-vintage rounded-md p-12 text-center text-[#6b6660]">
           Fetching recent posts from tracked profiles...
         </div>
       ) : (
@@ -101,7 +101,7 @@ const ActivityFeed = () => {
               target="_blank"
               rel="noopener noreferrer"
               data-testid={`activity-item-${idx}`}
-              className="card-detective rounded-md p-5 flex items-start gap-4 group"
+              className="card-vintage rounded-md p-5 flex items-start gap-4 group"
               style={{ animation: `fadeInUp 0.4s ease-out ${Math.min(idx, 10) * 0.03}s backwards` }}
             >
               {activity.media_url ? (

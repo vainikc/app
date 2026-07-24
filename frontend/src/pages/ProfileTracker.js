@@ -94,7 +94,7 @@ const ProfileTracker = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10">
-        <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3">
+        <div className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3 inline-block pl-6">
           Investigations
         </div>
         <h1 className="font-heading text-5xl sm:text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2">
@@ -104,7 +104,7 @@ const ProfileTracker = () => {
         <div className="divider-ornate mt-6 max-w-md"></div>
       </div>
 
-      <div className="card-detective rounded-md p-6 mb-8">
+      <div className="card-vintage rounded-md p-6 mb-8">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-md bg-[#1a1613] border border-[#2a2622] flex items-center justify-center">
             <Plus className="w-4 h-4 text-[#d4a656]" strokeWidth={2} />
@@ -138,7 +138,7 @@ const ProfileTracker = () => {
 
       <div className="space-y-5">
         {trackedAccounts.length === 0 && (
-          <div className="card-detective rounded-md p-12 text-center">
+          <div className="card-vintage rounded-md p-12 text-center">
             <div className="font-heading text-2xl text-[#8a857e]">No profiles under observation yet.</div>
             <p className="text-sm text-[#6b6660] mt-2">Enter a username above to begin.</p>
           </div>
@@ -151,7 +151,7 @@ const ProfileTracker = () => {
             <div
               key={account.id}
               data-testid={`profile-card-${account.username}`}
-              className="card-detective rounded-md p-6"
+              className="card-vintage rounded-md p-6"
               style={{ animation: `fadeInUp 0.4s ease-out ${idx * 0.05}s backwards` }}
             >
               {loading[account.username] && !profile ? (

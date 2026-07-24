@@ -1,0 +1,43 @@
+{
+  "summary": "Regression + scheduler + UI-polish verification. RESULT: 20/20 backend pytest cases pass; scheduler + all 6 frontend pages verified end-to-end with real Apify/GPT-5.4 data. New AsyncIOScheduler is confirmed running via backend logs ('[Scheduler] Started auto-snapshot job (every 6h)' and '[Scheduler] Running snapshot for 1 tracked accounts' followed by '[Scheduler] Snapshot saved for @chilichidiu: 1472 followers'). GET /api/profile/chilichidiu/history returns 2 real snapshots inserted by the scheduler (timestamps 2026-07-24T10:52 and 10:59 UTC), proving the scheduled job is writing to Mongo. All prior endpoints (/api/, /api/accounts CRUD, /api/profile/{u}, /api/profile/{u}/activity, /api/relationships, /api/search, /api/image-proxy, /api/insights/{u}) still work. GPT-5.4 insights confirmed with all 4 required sections (Content Strategy, Audience, Engagement, Recommendation). Frontend UI polish verified: new FaUserSecret detective logo renders, 'Intelligence Bureau' tagline visible, numbered nav 01-06 present, corner-ornament 'Case File - Overview' header on Dashboard, case IDs (#0001) shown per tracked account, 'Active Investigations' section rendered, system-status footer showing Apify LIVE + GPT-5.4 READY with live pulse. Tracker/Activity/Reports/Ties&Trails/Search all render real Instagram data with all images loading via /api/image-proxy (naturalWidth>0). CSV Export button visible on Reports. Force graph renders on Ties & Trails. Search returns real @natgeo (268,965,439 followers, National Geographic).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/insights/{username}", "issue": "Pre-existing: on LLM failure endpoint returns HTTP 200 with error message in 'insights' field instead of a non-2xx (carried over from iterations 1 & 2)."},
+      {"endpoint": "GET /api/profile/{username}", "issue": "Pre-existing: 'category' returns literal string 'None' when Apify's businessCategoryName is the string 'None' rather than a missing key (carried over)."},
+      {"endpoint": "APScheduler startup", "issue": "Older log lines show a prior NameError ('AsyncIOScheduler not defined') from an earlier reload cycle before the import was added. Current process (PID 5328) started successfully with the fix; no runtime impact. Just noise in backend.err.log history."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional (carried over): return non-2xx on /api/insights when LLM fails so UI can distinguish success from failure.",
+    "Optional (carried over): normalize 'None'/None/'' businessCategoryName values in fetch_instagram_profile.",
+    "Optional: image_proxy URL allowlist still uses substring match (in url); harden to hostname endswith('cdninstagram.com')/endswith('fbcdn.net')/endswith('.instagram.com') to prevent bypass via query params.",
+    "Optional: scheduler currently only runs the snapshot job every 6h; consider persisting job runs to Mongo (jobstore) so restarts don't cause double-runs when combined with next_run_time=now."
+  ],
+  "critical_code_review_comments": [
+    "server.py is one 439-line monolith. Recommend splitting into modules: apify_client.py, models.py, routes/*.py, scheduler.py. Will help maintainability as features grow.",
+    "Scheduler declares scheduler=AsyncIOScheduler(...) after @app.on_event('shutdown') references it; NameError risk if shutdown fires before the module-level line executes on some Python startups. Safer to declare scheduler before defining the shutdown handler (module-level top of file).",
+    "profile_cache is unbounded in-memory dict — memory will grow if many usernames get proxied. Consider using cachetools TTLCache with maxsize.",
+    "image_proxy has no per-IP rate limiting and no size cap; abuse risk on a public URL (unchanged from iteration_2).",
+    "Snapshot job uses fixed asyncio.sleep(5) between accounts — fine for 1 account but will not scale (e.g. 200 accounts = 1000s of blocking sleep inside the job). Consider concurrency-limited gather or randomized backoff.",
+    "get_ai_insights returns 200 with error text in insights on LLM failure, hiding failures from monitoring/alerting.",
+    "Dashboard.js triggers a /api/profile fetch per tracked account on mount; N+1 pattern. Consider a single /api/dashboard endpoint that returns aggregated cached data."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (20/20 pytest)", "frontend": "100% (6/6 pages render real Apify data + polished UI + images via proxy)"},
+  "test_credentials": "N/A - app has no authentication",
+  "seed_data_creation": "Test run added and removed @natgeo tracked account during pytest lifecycle. @chilichidiu remains as the pre-existing tracked account with 2 scheduler-driven snapshots in follower_snapshots.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Scheduler is verified working — every 6h it fetches fresh Apify data for all tracked accounts and inserts into follower_snapshots. To retest scheduler manually: (a) restart backend with `sudo supervisorctl restart backend`, (b) tail /var/log/supervisor/backend.err.log for '[Scheduler] Started auto-snapshot job' and 'Snapshot saved for @X: N followers', (c) hit GET /api/profile/{u}/history and confirm new snapshot appended. UI polish (logo, numbered nav, case IDs, system status footer, Active Investigations) is fully in place. No regressions from iteration_2.",
+  "rca of the issue": "N/A - no bugs found in this iteration. Scheduler works, all endpoints work, UI polish landed correctly."
+}

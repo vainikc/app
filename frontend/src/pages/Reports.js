@@ -80,7 +80,7 @@ const Reports = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10">
-        <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3">
+        <div className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3 inline-block pl-6">
           Case Reports
         </div>
         <h1 className="font-heading text-5xl sm:text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2">
@@ -91,13 +91,13 @@ const Reports = () => {
       </div>
 
       {trackedAccounts.length === 0 ? (
-        <div className="card-detective rounded-md p-12 text-center">
+        <div className="card-vintage rounded-md p-12 text-center">
           <div className="font-heading text-2xl text-[#8a857e]">No cases to report on.</div>
           <p className="text-sm text-[#6b6660] mt-2">Track profiles to generate reports.</p>
         </div>
       ) : (
         <>
-          <div className="card-detective rounded-md p-6 mb-6">
+          <div className="card-vintage rounded-md p-6 mb-6">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex-1 min-w-[240px]">
                 <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6b6660] mb-2">Select Case</div>
@@ -141,7 +141,7 @@ const Reports = () => {
                 { label: 'Posts', value: profile.posts?.toLocaleString() },
                 { label: 'Data Points', value: history.length },
               ].map((s, i) => (
-                <div key={i} className="card-detective rounded-md p-5">
+                <div key={i} className="card-vintage rounded-md p-5">
                   <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6b6660]">{s.label}</div>
                   <div className="font-mono text-2xl font-bold text-[#e8e6e1] mt-2">{s.value}</div>
                 </div>
@@ -149,7 +149,7 @@ const Reports = () => {
             </div>
           )}
 
-          <div className="card-detective rounded-md p-6 mb-6">
+          <div className="card-vintage rounded-md p-6 mb-6">
             <h2 className="font-heading text-2xl font-semibold text-[#e8e6e1] mb-6">Follower Growth</h2>
             {loading ? (
               <div className="text-[#6b6660] text-center py-12">Loading...</div>
@@ -185,7 +185,7 @@ const Reports = () => {
             )}
           </div>
 
-          <div className="card-detective rounded-md p-6">
+          <div className="card-vintage rounded-md p-6">
             <h2 className="font-heading text-2xl font-semibold text-[#e8e6e1] mb-6">Engagement Per Post</h2>
             {engagementData.length === 0 ? (
               <div className="text-[#6b6660] text-center py-12">No recent posts to analyze.</div>

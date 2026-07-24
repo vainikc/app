@@ -5,12 +5,14 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 import uuid
 from datetime import datetime, timezone
 import httpx
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -386,4 +388,51 @@ app.add_middleware(
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
     client.close()
+
+
+# Scheduled task: snapshot all tracked accounts every 6 hours for historical trend data
+scheduler = AsyncIOScheduler(timezone="UTC")
+
+
+async def snapshot_all_tracked_accounts():
+    """Automatically capture follower snapshots for all tracked accounts."""
+    try:
+        accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(200)
+        logger.info(f"[Scheduler] Running snapshot for {len(accounts)} tracked accounts")
+        for acc in accounts:
+            username = acc['username']
+            try:
+                # Force fresh fetch by removing from cache
+                profile_cache.pop(f"profile_{username}", None)
+                profile = await fetch_instagram_profile(username)
+                await db.follower_snapshots.insert_one({
+                    "username": username,
+                    "followers": profile['followers'],
+                    "following": profile['following'],
+                    "posts": profile['posts'],
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+                logger.info(f"[Scheduler] Snapshot saved for @{username}: {profile['followers']} followers")
+                # Space out Apify calls to avoid rate limits
+                await asyncio.sleep(5)
+            except Exception as e:
+                logger.error(f"[Scheduler] Failed to snapshot @{username}: {e}")
+    except Exception as e:
+        logger.error(f"[Scheduler] snapshot_all_tracked_accounts failed: {e}")
+
+
+@app.on_event("startup")
+async def start_scheduler():
+    scheduler.add_job(
+        snapshot_all_tracked_accounts,
+        'interval',
+        hours=6,
+        id='auto_snapshot',
+        replace_existing=True,
+        next_run_time=datetime.now(timezone.utc)  # Run first job in ~immediately after startup
+    )
+    scheduler.start()
+    logger.info("[Scheduler] Started auto-snapshot job (every 6h)")
