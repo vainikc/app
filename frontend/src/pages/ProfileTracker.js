@@ -4,6 +4,7 @@ import { Plus, Trash2, Sparkles, ExternalLink, ShieldCheck, Lock, Briefcase, Hea
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { proxyImage } from '@/lib/imageProxy';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -161,9 +162,8 @@ const ProfileTracker = () => {
                     <div className="flex items-start gap-4 flex-1">
                       {profile.profile_pic ? (
                         <img
-                          src={profile.profile_pic}
+                          src={proxyImage(profile.profile_pic)}
                           alt={profile.username}
-                          referrerPolicy="no-referrer"
                           className="w-20 h-20 rounded-full border-2 border-[#d4a656]/60 object-cover"
                           onError={(e) => { e.target.style.display = 'none'; }}
                         />
@@ -254,9 +254,8 @@ const ProfileTracker = () => {
                           >
                             {post.display_url && (
                               <img
-                                src={post.display_url}
+                                src={proxyImage(post.display_url)}
                                 alt=""
-                                referrerPolicy="no-referrer"
                                 className="w-full h-full object-cover"
                                 onError={(e) => { e.target.style.display = 'none'; }}
                               />

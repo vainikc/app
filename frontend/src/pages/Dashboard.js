@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Users, TrendingUp, Activity, Sparkles, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { proxyImage } from '@/lib/imageProxy';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -145,9 +146,8 @@ const Dashboard = () => {
                   <div className="flex items-center gap-3 mb-4">
                     {profile?.profile_pic ? (
                       <img
-                        src={profile.profile_pic}
+                        src={proxyImage(profile.profile_pic)}
                         alt={account.username}
-                        referrerPolicy="no-referrer"
                         className="w-12 h-12 rounded-full border border-[#d4a656]/40 object-cover"
                         onError={(e) => { e.target.style.display = 'none'; }}
                       />

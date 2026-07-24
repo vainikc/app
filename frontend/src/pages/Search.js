@@ -4,6 +4,7 @@ import { Search as SearchIcon, Plus, ShieldCheck, Lock, Briefcase, ExternalLink 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { proxyImage } from '@/lib/imageProxy';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -105,9 +106,8 @@ const Search = () => {
             <div className="flex items-start gap-4 mb-5">
               {profile.profile_pic ? (
                 <img
-                  src={profile.profile_pic}
+                  src={proxyImage(profile.profile_pic)}
                   alt={profile.username}
-                  referrerPolicy="no-referrer"
                   className="w-16 h-16 rounded-full border-2 border-[#d4a656]/60 object-cover"
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
@@ -176,9 +176,8 @@ const Search = () => {
                   >
                     {p.display_url && (
                       <img
-                        src={p.display_url}
+                        src={proxyImage(p.display_url)}
                         alt=""
-                        referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                         onError={(e) => { e.target.style.display = 'none'; }}
                       />

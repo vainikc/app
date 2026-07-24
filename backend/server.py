@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -67,6 +68,10 @@ async def fetch_instagram_profile(username: str) -> dict:
     if p.get('error'):
         raise HTTPException(status_code=404, detail=f"Instagram profile @{username} not found or is inaccessible")
 
+    category_raw = p.get('businessCategoryName')
+    if not category_raw or str(category_raw).lower() in ('none', 'null', ''):
+        category_raw = 'personal'
+
     profile = {
         'username': p.get('username', username),
         'full_name': p.get('fullName') or p.get('username', username),
@@ -79,7 +84,7 @@ async def fetch_instagram_profile(username: str) -> dict:
         'is_private': p.get('private', False),
         'is_business': p.get('isBusinessAccount', False),
         'external_url': p.get('externalUrl') or '',
-        'category': p.get('businessCategoryName') or 'personal',
+        'category': category_raw,
         'recent_posts': [],
     }
 
@@ -112,6 +117,29 @@ class TrackedAccount(BaseModel):
 @api_router.get("/")
 async def root():
     return {"message": "Sherlock API v2.0 - Live Instagram Data"}
+
+
+@api_router.get("/image-proxy")
+async def image_proxy(url: str = Query(...)):
+    """Proxy Instagram CDN images to bypass Cross-Origin-Resource-Policy header."""
+    if not url or ('cdninstagram.com' not in url and 'fbcdn.net' not in url and 'instagram.com' not in url):
+        raise HTTPException(status_code=400, detail="Invalid image URL")
+
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as http:
+        try:
+            r = await http.get(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            })
+            r.raise_for_status()
+        except Exception as e:
+            logger.error(f"Image proxy failed: {e}")
+            raise HTTPException(status_code=502, detail="Failed to fetch image")
+
+    return Response(
+        content=r.content,
+        media_type=r.headers.get('content-type', 'image/jpeg'),
+        headers={"Cache-Control": "public, max-age=3600"}
+    )
 
 
 @api_router.get("/accounts")

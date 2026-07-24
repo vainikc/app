@@ -1,0 +1,42 @@
+{
+  "summary": "Focused re-test of the new backend /api/image-proxy endpoint + regression check on prior 17 tests. RESULT: 20/20 backend pytest cases pass (17 prior + 3 new image-proxy). Frontend Tracker page now renders 7/7 Instagram images (profile pic + 6 post thumbnails) via the proxy with real JPEG bytes (naturalWidth>0, display:block, 0 failed requests). The CORP blocking issue from iteration_1 is fully resolved. /api/image-proxy validated end-to-end: (a) returns 200 with content-type image/jpeg and real JPEG magic bytes 0xFFD8FF (8065 bytes) for a live cdninstagram.com URL, (b) returns 400 for non-Instagram URLs (e.g. example.com), (c) returns 422 when url param is missing. Frontend imports proxyImage() from /app/frontend/src/lib/imageProxy.js in Dashboard.js, ProfileTracker.js, ActivityFeed.js, Search.js as required. Real @natgeo data still live (268,965,435 followers, verified, National Geographic).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/image-proxy", "issue": "Response Cache-Control header set by app to 'public, max-age=3600' is overridden by ingress to 'no-store, no-cache, must-revalidate'. Not a code bug; ingress strips/replaces cache headers. Consequence: browser will re-fetch proxied images on every load (extra bandwidth) but functionality is unaffected."},
+      {"endpoint": "GET /api/profile/{username}", "issue": "Pre-existing: field 'category' returns literal string 'None' when Apify's businessCategoryName is null (server.py falls back to 'personal' only when key is missing, not when value is the string 'None'). Unchanged from iteration_1."},
+      {"endpoint": "GET /api/insights/{username}", "issue": "Pre-existing: on LLM failure endpoint returns HTTP 200 with error message in 'insights' field. Unchanged from iteration_1."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: image-proxy sets a 1h Cache-Control but ingress replaces it with no-store; if browser caching matters, configure ingress to preserve the response Cache-Control for /api/image-proxy or serve images from a static/CDN path.",
+    "Optional (carried over): normalize 'None'/None/'' category values in fetch_instagram_profile.",
+    "Optional (carried over): surface non-2xx from /api/insights on LLM failure so the frontend can react."
+  ],
+  "critical_code_review_comments": [
+    "image_proxy accepts arbitrary URL then only checks for substring 'cdninstagram.com' / 'fbcdn.net' / 'instagram.com'. A malicious URL like 'https://attacker.com/x?y=cdninstagram.com' would pass. Recommend parsing hostname and matching endswith('cdninstagram.com') / endswith('fbcdn.net') / endswith('.instagram.com').",
+    "image_proxy has no size limit; if a hostile URL streams a huge file, server memory could balloon. Recommend cap (e.g. httpx stream + max bytes) or content-length pre-check.",
+    "image_proxy uses timeout=15s but returns 502 for any error; consider distinguishing 4xx (image not found) from network errors.",
+    "image_proxy has no per-IP rate limiting; a hot page could be used to amplify traffic to Instagram CDN through your infra.",
+    "proxyImage() helper uses substring check ('cdninstagram.com' in url) which is fine on the client but mirror the same allowlist tightening on backend."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (20/20 pytest cases pass; 3 new image-proxy tests all green)", "frontend": "100% - 7/7 Instagram images now render via proxy on Tracker page; zero failed image requests"},
+  "test_credentials": "N/A - app has no authentication",
+  "seed_data_creation": "Added @natgeo tracked account during frontend test (present in DB after test run).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Image proxy fix verified working end-to-end. Regression: all 17 prior tests still pass alongside 3 new image-proxy tests. Only carry-forward items are the pre-existing 'None' category string handling and LLM-error-as-200 minor issues. If hardening the proxy, tighten the URL allowlist to hostname suffix match (see critical_code_review_comments).",
+  "rca of the issue": "Prior iteration flagged Instagram CDN images blocked by browser due to Cross-Origin-Resource-Policy: same-origin on cdninstagram.com/fbcdn.net responses. Fix implemented in server.py adds GET /api/image-proxy?url=... that fetches the CDN image with a Mozilla User-Agent server-side and re-emits bytes under the app's own origin, bypassing CORP. Frontend helper /app/frontend/src/lib/imageProxy.js wraps CDN URLs and is used by all image-displaying pages. Verified with live natgeo profile pic + 6 post thumbnails rendering with naturalWidth > 0 and 0 failed network requests. Fix is complete."
+}

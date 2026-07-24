@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Heart, MessageCircle, Image as ImageIcon, ExternalLink, Film } from 'lucide-react';
+import { proxyImage } from '@/lib/imageProxy';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -105,9 +106,8 @@ const ActivityFeed = () => {
             >
               {activity.media_url ? (
                 <img
-                  src={activity.media_url}
+                  src={proxyImage(activity.media_url)}
                   alt=""
-                  referrerPolicy="no-referrer"
                   className="w-20 h-20 rounded-sm object-cover border border-[#1f1f1f]"
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />

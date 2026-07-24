@@ -159,6 +159,43 @@ class TestAccounts:
         assert r.status_code == 404
 
 
+# ---------- Image Proxy (Instagram CDN pass-through) ----------
+class TestImageProxy:
+    def test_image_proxy_missing_param(self, http):
+        r = http.get(f"{BASE_URL}/api/image-proxy", timeout=15)
+        assert r.status_code == 422
+
+    def test_image_proxy_rejects_non_instagram_url(self, http):
+        r = http.get(
+            f"{BASE_URL}/api/image-proxy",
+            params={"url": "https://example.com/image.jpg"},
+            timeout=15,
+        )
+        assert r.status_code == 400
+
+    def test_image_proxy_returns_real_jpeg_bytes(self, http):
+        # Fetch a real Instagram CDN URL from a live profile, then proxy it
+        p = http.get(f"{BASE_URL}/api/profile/natgeo", timeout=APIFY_TIMEOUT)
+        assert p.status_code == 200
+        pic_url = p.json().get("profile_pic")
+        assert pic_url and ("cdninstagram.com" in pic_url or "fbcdn.net" in pic_url), \
+            f"Expected Instagram CDN URL, got: {pic_url}"
+
+        r = http.get(
+            f"{BASE_URL}/api/image-proxy",
+            params={"url": pic_url},
+            timeout=30,
+        )
+        assert r.status_code == 200, f"Got {r.status_code}: {r.text[:200]}"
+        ct = r.headers.get("content-type", "")
+        assert ct.startswith("image/"), f"Unexpected content-type: {ct}"
+        body = r.content
+        assert len(body) > 1000, f"Body too small: {len(body)} bytes"
+        # Verify real JPEG or PNG magic bytes
+        assert body[:3] == b"\xff\xd8\xff" or body[:8] == b"\x89PNG\r\n\x1a\n", \
+            f"Not a real image, magic bytes: {body[:8].hex()}"
+
+
 # ---------- AI Insights via Emergent LLM ----------
 class TestAIInsights:
     def test_insights_natgeo(self, http):
