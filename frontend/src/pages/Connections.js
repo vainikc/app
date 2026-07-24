@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UserPlus, UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, MessageSquare, Heart, Clock, Sparkles, AlertTriangle } from 'lucide-react';
+import { UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, Clock, Sparkles, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -37,7 +37,6 @@ const Connections = () => {
   const [timeRange, setTimeRange] = useState('7');
   const [followersData, setFollowersData] = useState(null);
   const [followingData, setFollowingData] = useState(null);
-  const [commentsData, setCommentsData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -47,7 +46,6 @@ const Connections = () => {
   useEffect(() => {
     setFollowersData(null);
     setFollowingData(null);
-    setCommentsData(null);
   }, [selected, timeRange]);
 
   const fetchAccounts = async () => {
@@ -70,9 +68,6 @@ const Connections = () => {
         const res = await axios.get(`${API}/profile/${selected}/following-list?limit=100&since_days=${timeRange}`);
         setFollowingData(res.data);
         if (res.data.quota_exhausted) toast.error('Apify quota exhausted');
-      } else if (tab === 'comments') {
-        const res = await axios.get(`${API}/profile/${selected}/post-comments?posts_limit=3&comments_limit=25`);
-        setCommentsData(res.data);
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to fetch');
@@ -83,10 +78,9 @@ const Connections = () => {
   const tabs = [
     { id: 'following', label: 'Recently followed', icon: UserCheck },
     { id: 'followers', label: 'New followers', icon: Users },
-    { id: 'comments', label: 'Comments on posts', icon: MessageSquare },
   ];
 
-  const currentData = tab === 'followers' ? followersData : tab === 'following' ? followingData : commentsData;
+  const currentData = tab === 'followers' ? followersData : followingData;
   const showTimeRange = tab === 'followers' || tab === 'following';
   const periodLabel = TIME_RANGES.find(r => r.value === timeRange)?.label.toLowerCase() || 'past week';
 
@@ -207,10 +201,8 @@ const Connections = () => {
             </div>
           ) : tab === 'following' ? (
             <FollowingView data={currentData} period={periodLabel} />
-          ) : tab === 'followers' ? (
-            <FollowersView data={currentData} period={periodLabel} />
           ) : (
-            <CommentsView comments={currentData} />
+            <FollowersView data={currentData} period={periodLabel} />
           )}
         </>
       )}
@@ -564,58 +556,5 @@ const QuotaExhausted = ({ type }) => (
   </div>
 );
 
-
-const CommentsView = ({ comments }) => {
-  if (!comments || comments.length === 0) {
-    return (
-      <div className="card-modern rounded-lg p-12 text-center text-[#a1a1aa]">
-        No comments found on recent posts.
-      </div>
-    );
-  }
-  return (
-    <div className="card-modern rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">Recent comments ({comments.length})</h3>
-        <span className="text-xs text-[#737373]">Sorted by likes</span>
-      </div>
-      <div className="space-y-2">
-        {comments.map((c, idx) => (
-          <div key={c.id || idx} data-testid={`comment-${idx}`} className="flex items-start gap-3 p-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-md hover:border-[#333] transition-colors">
-            {c.post_thumbnail && (
-              <a href={c.post_url} target="_blank" rel="noopener noreferrer" className="w-12 h-12 rounded-md overflow-hidden border border-[#262626] shrink-0">
-                <img src={proxyImage(c.post_thumbnail)} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
-              </a>
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                {c.author_pic && (
-                  <img src={proxyImage(c.author_pic)} alt="" className="w-4 h-4 rounded-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
-                )}
-                <a href={`https://www.instagram.com/${c.author}/`} target="_blank" rel="noopener noreferrer" className="font-mono text-xs font-medium text-white hover:text-[#e5e5e5]">
-                  @{c.author}
-                </a>
-                <span className="text-[10px] text-[#525252]">{formatDate(c.timestamp)}</span>
-              </div>
-              <p className="text-sm text-[#d4d4d8] leading-relaxed">{c.text}</p>
-              <div className="flex items-center gap-3 mt-2 text-xs text-[#525252]">
-                <span className="flex items-center gap-1">
-                  <Heart className="w-3 h-3" />
-                  <span className="font-mono">{c.likes}</span>
-                </span>
-                {c.replies_count > 0 && (
-                  <span className="flex items-center gap-1">
-                    <MessageSquare className="w-3 h-3" />
-                    <span className="font-mono">{c.replies_count}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
 
 export default Connections;

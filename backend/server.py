@@ -425,6 +425,21 @@ async def get_recent_post_comments(request: Request, username: str, posts_limit:
     return all_comments
 
 
+@api_router.get("/post-comments")
+@limiter.limit("30/minute")
+async def get_single_post_comments(request: Request, post_url: str, limit: int = Query(30, ge=1, le=100)):
+    """Fetch comments for a single Instagram post (by full URL)."""
+    if not post_url or 'instagram.com' not in post_url:
+        raise HTTPException(status_code=400, detail="Valid Instagram post_url required")
+    try:
+        comments = await fetch_post_comments(post_url, limit)
+    except Exception as e:
+        logger.error(f"Single post comments fetch failed for {post_url}: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch comments")
+    return comments
+
+
+
 # ========== Aggregated dashboard endpoint ==========
 
 @api_router.get("/dashboard")
