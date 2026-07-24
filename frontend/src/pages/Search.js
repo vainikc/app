@@ -48,20 +48,20 @@ const Search = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10">
-        <div className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3 inline-block pl-6">
+        <div className="inline-block text-[10px] font-mono uppercase tracking-[0.3em] text-[#ffffff] mb-3 inline-block pl-6">
           Reconnaissance
         </div>
-        <h1 className="font-heading text-5xl sm:text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2">
+        <h1 className="text-5xl sm:text-6xl font-bold font-semibold tracking-tight text-[#fafafa] mb-2">
           Search
         </h1>
-        <p className="text-[#8a857e]">Preview any public Instagram profile before committing to observation.</p>
-        <div className="divider-ornate mt-6 max-w-md"></div>
+        <p className="text-[#a1a1aa]">Preview any public Instagram profile before committing to observation.</p>
+        <div className="divider mt-6 max-w-md"></div>
       </div>
 
-      <div className="card-vintage rounded-md p-6 mb-8">
+      <div className="card-modern rounded-md p-6 mb-8">
         <div className="flex gap-3">
           <div className="relative flex-1">
-            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b6660]" />
+            <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373]" />
             <Input
               data-testid="search-input"
               type="text"
@@ -69,14 +69,14 @@ const Search = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              className="pl-11 bg-[#0f0f0f] border-[#1f1f1f] focus:border-[#d4a656] focus:ring-[#d4a656] text-[#e8e6e1] font-mono h-11"
+              className="pl-11 bg-[#000000] border-[#1a1a1a] focus:border-[#ffffff] focus:ring-[#ffffff] text-[#fafafa] font-mono h-11"
             />
           </div>
           <Button
             data-testid="search-btn"
             onClick={handleSearch}
             disabled={loading}
-            className="bg-[#d4a656] hover:bg-[#c48f3e] text-[#0a0a0a] h-11 px-6 font-medium"
+            className="bg-[#ffffff] hover:bg-[#e5e5e5] text-[#000000] h-11 px-6 font-medium"
           >
             {loading ? 'Searching...' : 'Investigate'}
           </Button>
@@ -84,15 +84,15 @@ const Search = () => {
       </div>
 
       {loading && (
-        <div className="card-vintage rounded-md p-12 text-center text-[#6b6660]">
+        <div className="card-modern rounded-md p-12 text-center text-[#737373]">
           Fetching live profile data from Instagram...
         </div>
       )}
 
       {!loading && searched && results.length === 0 && (
-        <div className="card-vintage rounded-md p-12 text-center">
-          <div className="font-heading text-2xl text-[#8a857e]">No trace found.</div>
-          <p className="text-sm text-[#6b6660] mt-2">Try an exact Instagram username.</p>
+        <div className="card-modern rounded-md p-12 text-center">
+          <div className="font-body text-2xl text-[#a1a1aa]">No trace found.</div>
+          <p className="text-sm text-[#737373] mt-2">Try an exact Instagram username.</p>
         </div>
       )}
 
@@ -101,40 +101,40 @@ const Search = () => {
           <div
             key={profile.username}
             data-testid={`search-result-${profile.username}`}
-            className="card-vintage rounded-md p-6 animate-fade-in-up"
+            className="card-modern rounded-md p-6 animate-fade-in-up"
           >
             <div className="flex items-start gap-4 mb-5">
               {profile.profile_pic ? (
                 <img
                   src={proxyImage(profile.profile_pic)}
                   alt={profile.username}
-                  className="w-16 h-16 rounded-full border-2 border-[#d4a656]/60 object-cover"
+                  className="w-16 h-16 rounded-full border-2 border-[#ffffff]/60 object-cover"
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-[#1a1613] border-2 border-[#d4a656]/40 flex items-center justify-center">
-                  <span className="text-[#d4a656] font-mono text-xl">
+                <div className="w-16 h-16 rounded-full bg-[#0f0f0f] border-2 border-[#ffffff]/40 flex items-center justify-center">
+                  <span className="text-[#ffffff] font-mono text-xl">
                     {profile.username.charAt(0).toUpperCase()}
                   </span>
                 </div>
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-mono text-lg font-semibold text-[#e8e6e1]">@{profile.username}</h3>
-                  {profile.is_verified && <ShieldCheck className="w-4 h-4 text-[#d4a656]" strokeWidth={2} />}
-                  {profile.is_private && <Lock className="w-3.5 h-3.5 text-[#8a857e]" />}
-                  {profile.is_business && <Briefcase className="w-3.5 h-3.5 text-[#d4a656]" />}
+                  <h3 className="font-mono text-lg font-semibold text-[#fafafa]">@{profile.username}</h3>
+                  {profile.is_verified && <ShieldCheck className="w-4 h-4 text-[#ffffff]" strokeWidth={2} />}
+                  {profile.is_private && <Lock className="w-3.5 h-3.5 text-[#a1a1aa]" />}
+                  {profile.is_business && <Briefcase className="w-3.5 h-3.5 text-[#ffffff]" />}
                 </div>
-                <p className="font-heading text-lg text-[#c9c5be]">{profile.full_name}</p>
+                <p className="font-body text-lg text-[#d4d4d8]">{profile.full_name}</p>
                 {profile.bio && (
-                  <p className="text-xs text-[#8a857e] mt-1 line-clamp-2 whitespace-pre-wrap">{profile.bio}</p>
+                  <p className="text-xs text-[#a1a1aa] mt-1 line-clamp-2 whitespace-pre-wrap">{profile.bio}</p>
                 )}
                 {profile.external_url && (
                   <a
                     href={profile.external_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-[#d4a656] hover:text-[#e6d09e] mt-1"
+                    className="inline-flex items-center gap-1 text-xs text-[#ffffff] hover:text-[#f5f5f5] mt-1"
                   >
                     <ExternalLink className="w-3 h-3" />
                     Website
@@ -143,24 +143,24 @@ const Search = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 py-4 border-y border-[#1f1f1f] mb-5">
+            <div className="grid grid-cols-3 gap-3 py-4 border-y border-[#1a1a1a] mb-5">
               <div className="text-center">
-                <div className="font-mono text-lg font-bold text-[#e8e6e1]">
+                <div className="font-mono text-lg font-bold text-[#fafafa]">
                   {profile.posts?.toLocaleString()}
                 </div>
-                <div className="text-[10px] uppercase font-mono text-[#6b6660] tracking-wider">Posts</div>
+                <div className="text-[10px] uppercase font-mono text-[#737373] tracking-wider">Posts</div>
               </div>
-              <div className="text-center border-x border-[#1f1f1f]">
-                <div className="font-mono text-lg font-bold text-[#d4a656]">
+              <div className="text-center border-x border-[#1a1a1a]">
+                <div className="font-mono text-lg font-bold text-[#ffffff]">
                   {profile.followers?.toLocaleString()}
                 </div>
-                <div className="text-[10px] uppercase font-mono text-[#6b6660] tracking-wider">Followers</div>
+                <div className="text-[10px] uppercase font-mono text-[#737373] tracking-wider">Followers</div>
               </div>
               <div className="text-center">
-                <div className="font-mono text-lg font-bold text-[#e8e6e1]">
+                <div className="font-mono text-lg font-bold text-[#fafafa]">
                   {profile.following?.toLocaleString()}
                 </div>
-                <div className="text-[10px] uppercase font-mono text-[#6b6660] tracking-wider">Following</div>
+                <div className="text-[10px] uppercase font-mono text-[#737373] tracking-wider">Following</div>
               </div>
             </div>
 
@@ -172,7 +172,7 @@ const Search = () => {
                     href={p.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="aspect-square rounded-sm overflow-hidden border border-[#1f1f1f] hover:border-[#d4a656]"
+                    className="aspect-square rounded-sm overflow-hidden border border-[#1a1a1a] hover:border-[#ffffff]"
                   >
                     {p.display_url && (
                       <img
@@ -191,7 +191,7 @@ const Search = () => {
               data-testid={`track-btn-${profile.username}`}
               onClick={() => handleTrack(profile.username)}
               disabled={tracking[profile.username]}
-              className="w-full bg-[#1a1613] hover:bg-[#221c17] border border-[#d4a656]/40 hover:border-[#d4a656] text-[#d4a656]"
+              className="w-full bg-[#0f0f0f] hover:bg-[#1a1a1a] border border-[#ffffff]/40 hover:border-[#ffffff] text-[#ffffff]"
             >
               <Plus className="w-4 h-4 mr-2" />
               {tracking[profile.username] ? 'Adding...' : 'Track This Profile'}

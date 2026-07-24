@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 7 verifies smart_recent backend feature + Grok-style monochrome theme redesign. Backend: 39/39 pytest pass in 99s (36 baseline + 3 new TestSmartRecent tests). Live-verified: GET /api/profile/chilichidiu/following-list?since_days=7 with seeded 10-day baseline returns profile_count=1385, sample_count=200, net_change=15, has_count_baseline=true, and smart_recent has exactly 15 users starting with @sxmxnttha (matches current_list[:15]). GET /followers-list has smart_recent field for followers path (capped at sample_count when net_change > 200). Frontend Playwright E2E on /connections: (1) Pure black body bg #000, (2) Geist font-family on h1, (3) 0 amber-colored elements, (4) 0 Cormorant/Garamond fonts across Dashboard/Tracker/Activity/Connections/Ties&Trails/Reports/Search, (5) Layout sidebar shows 'Sherlock v3.3' + 7 nav items + 'Live data' green dot footer, no 'Intelligence Bureau' tagline, (6) Recently-Followed tab after Fetch renders '15 accounts followed in the past 7 days' highlighted card with #01..#15 numbered UserRow entries (@sxmxnttha, @addeola_mary, @v1nny.ad, ...), white 'Smart-scoped list' banner explains scope narrowing, (7) Followers tab renders '+1290' green stat + 'Scraped 200 of 1,470' sublabel + Smart-scoped block with 200 UserCards + 'Lost / Need baseline' fallback. Regression: all prior endpoints (root, dashboard, profile natgeo/cristiano, accounts CRUD, image-proxy, insights, search, post-comments, connection-history, rate-limit) pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Connections / Followers tab (smart_recent)", "issues": ["When net_change > sample_count (e.g. net_change=1290 but scraper capped at 200), the highlighted card header shows '200 new followers in the past 7 days' but the Smart-scoped banner text just above still says 'We know 1290 new follows happened in the past 7 days, so we've narrowed the scrape to exactly those 1290 accounts using Instagram\u2019s recency ordering.' — the two counts are inconsistent (banner says 1290, block shows 200 rows). Recommend clamping the banner\u2019s stated count to min(net_change, sample_count) or explicitly noting 'showing top 200 of 1290 recent-follows due to scraper cap.' This is not a correctness issue (backend caps smart_recent at len(current_list) correctly) but the copy is misleading. Not a blocker."]},
+      {"screen": "Reports (chart gradient)", "issues": ["Reports.js still has a `<linearGradient id=\"amberGrad\">` element with white stops — the identifier name references the old amber theme but the actual color stops are already white. Rename to `whiteGrad` for consistency (cosmetic)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional UX polish (non-blocking): In Connections FollowersView, when net_change exceeds sample_count, either clamp the 'Smart-scoped list.' banner text to display sample_count or explicitly say '200 of 1290 shown due to scraper cap' so the numbers in the banner and the highlighted-card header agree.",
+    "Cosmetic: rename `amberGrad` to `whiteGrad` (or similar) in Reports.js — id-only leftover from the old theme."
+  ],
+  "critical_code_review_comments": [
+    "server.py L296-305 correctly computes smart_recent = current_list[:min(net_change, len(current_list))] when net_change > 0. Empty [] otherwise. Applies to both 'following' and 'followers' connection_types — matches the review request.",
+    "server.py L294 sets most_recent = current_list[:20] only for 'following' — smart_recent is the new orthogonal field so this remains correct. Both fields coexist in the response and Frontend prefers smart_recent when non-empty, falling back to most_recent (via the mostRecent variable in Connections.js FollowingView) when smart_recent is empty.",
+    "Connections.js L271-272 has clean precedence: numeric net_change from count-baseline wins, otherwise falls back to full-list added_details when hasBaseline=true, otherwise null. FollowersView L395-396 mirrors this correctly.",
+    "Connections.js L446 `<details ... open>` — Followers 'All followers' section defaults expanded which will show 200 UserCards immediately. This is intentional per prior iteration testing (users prefer eager render on Followers vs. lazy expand on Following). Fine.",
+    "Layout.js L41 data-testids: 'nav-dashboard', 'nav-tracker', 'nav-activity', 'nav-connections', 'nav-ties-trails', 'nav-reports', 'nav-search' — all verified present. The transform `label.toLowerCase().replace(/ & /g, '-').replace(/ /g, '-')` produces 'ties-trails' from 'Ties & Trails' correctly.",
+    "index.css: pure black bg, Geist font imports, --primary=white, .card-modern .card-modern-hi .btn-primary .btn-ghost all defined and used consistently across pages. .dot-live pulse animation uses green (#22c55e) which is the only accent color besides destructive red — matches Grok monochrome aesthetic.",
+    "backend_test.py TestSmartRecent (3 new tests) covers: (a) net_change positive → smart_recent = current_list[:net_change] with correct user shape, (b) followers smart_recent field present with same slice semantics, (c) untracked account with no baseline → smart_recent == [].",
+    "Minor: The frontend banner in FollowersView says 'We know 1290 new follows happened' but the block below shows only 200 rows. The scraper cap creates a mismatch in copy. Recommend clamping the copy to min(net_change, smart_recent.length) or adding a 'showing top N due to cap' note."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py — added 'smart_recent' to EXPECTED_LIST_KEYS and TestSmartRecent class with 3 new tests"
+  ],
+  "success_rate": {
+    "backend": "100% (39/39 tests pass in 99s)",
+    "frontend": "100% for smart_recent feature + theme redesign — all data-testids present, smart_recent block rendered on Recently-Followed tab with exactly 15 numbered rows starting with @sxmxnttha, Smart-scoped-list banner explains scope, pure black bg + Geist font + zero amber/serif verified on 7 pages (Dashboard/Tracker/Activity/Connections/Ties&Trails/Reports/Search). One minor UX inconsistency logged as design_issue when net_change > 200 scraper cap."
+  },
+  "test_credentials": "N/A — app has no authentication",
+  "seed_data_creation": "Inserted a follower_snapshots doc for chilichidiu with {followers:180, following:1370, ts:10 days ago, _test_seed:true} to trigger the count-baseline smart_recent path. AFTER TESTING the _test_seed doc was deleted (verified: 'Deleted _test_seed docs: 1'). Ordinary follower_snapshots from prior test runs and the scheduler remain intact.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "1) All smart_recent backend + frontend flows verified end-to-end with live Apify data. 2) TestSmartRecent depends on the chilichidiu follower_snapshots collection having a baseline older than since_days=7. The synthetic seed with _test_seed=true was cleaned up but there are 22 other legitimate snapshots for chilichidiu spanning multiple hours — the most recent snapshot from a prior test may satisfy the 7-day cutoff or may not depending on time. If test_following_smart_recent_matches_net_change fails intermittently, seed the doc again per the review request instructions. 3) When net_change > sample_count (200 cap), the Followers 'Smart-scoped list' banner copy is stale (mentions the raw net_change count) but backend correctness is preserved — filed under design_issues. 4) Amber colors and Cormorant Garamond serif are fully removed from every page tested. Only leftover is the id='amberGrad' element in Reports.js (color stops are already white — cosmetic). 5) Live data snapshot @ test time: chilichidiu profile follower=1470, following=1385, chilichidiu 15 recent follows starting @sxmxnttha. 6) All 7 nav items and their data-testids verified.",
+  "rca of the issue": "N/A — no bugs to root-cause this iteration; this is a feature addition + theme redesign verification. The smart_recent feature works as designed: backend computes current_list[:min(net_change, len(current_list))] when net_change > 0 from count-baseline path; frontend prefers smart_recent over legacy added_details / most_recent lists. Theme redesign is complete: index.css, tailwind.config.js, Layout.js, SherlockLogo.js, and all pages were rewritten to a pure-black + Geist + white-primary Grok-style monochrome. Two minor cosmetic follow-ups documented in action_items."
+}

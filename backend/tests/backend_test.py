@@ -230,6 +230,8 @@ EXPECTED_LIST_KEYS = [
     "quota_exhausted", "comparison_period", "has_baseline", "baseline_timestamp",
     # v3.2 bug-fix fields (iteration 6+):
     "profile_count", "sample_count", "net_change", "baseline_count", "has_count_baseline",
+    # v3.3 smart_recent field (iteration 7+):
+    "smart_recent",
 ]
 
 
@@ -466,6 +468,80 @@ class TestConnectionListsBugFix:
             if not data["has_count_baseline"]:
                 assert data["net_change"] is None
                 assert data["baseline_count"] is None
+
+
+# ---------- v3.3 smart_recent field (iteration 7+) ----------
+# When net_change > 0 from count-baseline path, smart_recent = current_list[:net_change]
+# giving exactly N users ordered by IG recency (newest-first).
+class TestSmartRecent:
+    """Verify smart_recent field returns exactly N most-recent users when
+    net_change > 0."""
+
+    def test_following_smart_recent_matches_net_change(self, http):
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/following-list",
+            params={"limit": 100, "since_days": 7},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert "smart_recent" in data
+        assert isinstance(data["smart_recent"], list)
+        net_change = data.get("net_change")
+        current_list = data.get("current", [])
+        smart_recent = data["smart_recent"]
+        if net_change is not None and net_change > 0 and not data["quota_exhausted"]:
+            # Exact length == net_change (capped by scraped list size)
+            expected_len = min(net_change, len(current_list))
+            assert len(smart_recent) == expected_len, (
+                f"smart_recent len={len(smart_recent)} != expected {expected_len} "
+                f"(net_change={net_change}, current_list_len={len(current_list)})"
+            )
+            # Must equal current_list[:N] (top-of-list slice)
+            assert smart_recent == current_list[:expected_len], (
+                "smart_recent is not the top-N slice of current_list"
+            )
+            # Verify user shape
+            u0 = smart_recent[0]
+            for k in ["username", "full_name", "profile_pic", "is_verified", "is_private"]:
+                assert k in u0, f"Missing key {k} in smart_recent user"
+        else:
+            # No baseline or 0/negative net_change => smart_recent must be empty
+            assert smart_recent == []
+
+    def test_followers_smart_recent_field_present(self, http):
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/followers-list",
+            params={"limit": 100, "since_days": 7},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert "smart_recent" in data
+        assert isinstance(data["smart_recent"], list)
+        net_change = data.get("net_change")
+        current_list = data.get("current", [])
+        smart_recent = data["smart_recent"]
+        if net_change is not None and net_change > 0 and not data["quota_exhausted"]:
+            expected_len = min(net_change, len(current_list))
+            assert len(smart_recent) == expected_len
+            assert smart_recent == current_list[:expected_len]
+        else:
+            assert smart_recent == []
+
+    def test_smart_recent_empty_when_no_baseline(self, http):
+        """since_days=0 with only the seeded-old baseline still finds it (most recent snapshot).
+        Use a random account with no snapshots to verify empty behavior."""
+        r = http.get(
+            f"{BASE_URL}/api/profile/nasa/following-list",
+            params={"limit": 10, "since_days": 7},
+            timeout=LIST_TIMEOUT,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            # If no count-baseline, smart_recent must be empty
+            if not data["has_count_baseline"] or (data.get("net_change") or 0) <= 0:
+                assert data["smart_recent"] == []
 
 
 # ---------- Post Comments (new v3.0) ----------

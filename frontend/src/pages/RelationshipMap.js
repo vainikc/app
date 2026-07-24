@@ -38,15 +38,15 @@ const RelationshipMap = () => {
 
   const getNodeColor = (node) => {
     const palette = {
-      personal: '#d4a656',
-      unknown: '#6b6660',
+      personal: '#ffffff',
+      unknown: '#737373',
     };
     if (palette[node.category]) return palette[node.category];
     // Hash-based color for other categories
     let hash = 0;
     const cat = String(node.category || 'x');
     for (let i = 0; i < cat.length; i++) hash = cat.charCodeAt(i) + ((hash << 5) - hash);
-    const colors = ['#d4a656', '#7d9c60', '#a87433', '#c9c5be', '#8b5f2b', '#5d7a4a'];
+    const colors = ['#ffffff', '#22c55e', '#a87433', '#d4d4d8', '#333333', '#5d7a4a'];
     return colors[Math.abs(hash) % colors.length];
   };
 
@@ -55,25 +55,25 @@ const RelationshipMap = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10">
-        <div className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3 inline-block pl-6">
+        <div className="inline-block text-[10px] font-mono uppercase tracking-[0.3em] text-[#ffffff] mb-3 inline-block pl-6">
           Network Analysis
         </div>
-        <h1 className="font-heading text-5xl sm:text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2">
+        <h1 className="text-5xl sm:text-6xl font-bold font-semibold tracking-tight text-[#fafafa] mb-2">
           Ties &amp; Trails
         </h1>
-        <p className="text-[#8a857e]">Connections between tracked profiles by category and interest.</p>
-        <div className="divider-ornate mt-6 max-w-md"></div>
+        <p className="text-[#a1a1aa]">Connections between tracked profiles by category and interest.</p>
+        <div className="divider mt-6 max-w-md"></div>
       </div>
 
-      <div className="card-vintage rounded-md p-6" data-testid="relationship-map">
-        <div ref={containerRef} style={{ height: '600px', width: '100%', background: '#0a0a0a' }} className="rounded-sm">
+      <div className="card-modern rounded-md p-6" data-testid="relationship-map">
+        <div ref={containerRef} style={{ height: '600px', width: '100%', background: '#000000' }} className="rounded-sm">
           {loading ? (
-            <div className="flex items-center justify-center h-full text-[#6b6660]">Loading network...</div>
+            <div className="flex items-center justify-center h-full text-[#737373]">Loading network...</div>
           ) : graphData.nodes.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <div className="font-heading text-2xl text-[#8a857e] mb-2">No connections yet</div>
-                <p className="text-sm text-[#6b6660]">Track multiple profiles to reveal the web.</p>
+                <div className="font-body text-2xl text-[#a1a1aa] mb-2">No connections yet</div>
+                <p className="text-sm text-[#737373]">Track multiple profiles to reveal the web.</p>
               </div>
             </div>
           ) : (
@@ -81,7 +81,7 @@ const RelationshipMap = () => {
               graphData={graphData}
               width={dims.width - 48}
               height={600}
-              backgroundColor="#0a0a0a"
+              backgroundColor="#000000"
               nodeLabel={(n) => `@${n.label} · ${n.followers?.toLocaleString() || 0} followers`}
               linkColor={() => 'rgba(212, 166, 86, 0.25)'}
               linkWidth={(l) => Math.max(1, l.value / 3)}
@@ -95,7 +95,7 @@ const RelationshipMap = () => {
                 ctx.fillStyle = getNodeColor(node);
                 ctx.fill();
                 if (node.verified) {
-                  ctx.strokeStyle = '#e6d09e';
+                  ctx.strokeStyle = '#f5f5f5';
                   ctx.lineWidth = 2 / globalScale;
                   ctx.stroke();
                 }
@@ -103,7 +103,7 @@ const RelationshipMap = () => {
                 ctx.font = `${fontSize}px 'JetBrains Mono'`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'top';
-                ctx.fillStyle = '#e8e6e1';
+                ctx.fillStyle = '#fafafa';
                 ctx.fillText(label, node.x, node.y + radius + 2);
               }}
               nodePointerAreaPaint={(node, color, ctx) => {
@@ -118,15 +118,15 @@ const RelationshipMap = () => {
         </div>
 
         {categories.length > 0 && (
-          <div className="mt-6 flex flex-wrap gap-3 pt-4 border-t border-[#1f1f1f]">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-[#6b6660] self-center">Legend</div>
+          <div className="mt-6 flex flex-wrap gap-3 pt-4 border-t border-[#1a1a1a]">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[#737373] self-center">Legend</div>
             {categories.map((cat) => (
-              <div key={cat} className="flex items-center gap-2 px-3 py-1 bg-[#141414] border border-[#1f1f1f] rounded-full">
+              <div key={cat} className="flex items-center gap-2 px-3 py-1 bg-[#0f0f0f] border border-[#1a1a1a] rounded-full">
                 <div
                   className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: getNodeColor({ category: cat }) }}
                 />
-                <span className="text-xs font-mono text-[#c9c5be] capitalize">{cat}</span>
+                <span className="text-xs font-mono text-[#d4d4d8] capitalize">{cat}</span>
               </div>
             ))}
           </div>

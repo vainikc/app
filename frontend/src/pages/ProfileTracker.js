@@ -94,26 +94,26 @@ const ProfileTracker = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10">
-        <div className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3 inline-block pl-6">
+        <div className="inline-block text-[10px] font-mono uppercase tracking-[0.3em] text-[#ffffff] mb-3 inline-block pl-6">
           Investigations
         </div>
-        <h1 className="font-heading text-5xl sm:text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2">
+        <h1 className="text-5xl sm:text-6xl font-bold font-semibold tracking-tight text-[#fafafa] mb-2">
           Profile Tracker
         </h1>
-        <p className="text-[#8a857e]">Add any public Instagram username. We'll do the observing.</p>
-        <div className="divider-ornate mt-6 max-w-md"></div>
+        <p className="text-[#a1a1aa]">Add any public Instagram username. We'll do the observing.</p>
+        <div className="divider mt-6 max-w-md"></div>
       </div>
 
-      <div className="card-vintage rounded-md p-6 mb-8">
+      <div className="card-modern rounded-md p-6 mb-8">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-md bg-[#1a1613] border border-[#2a2622] flex items-center justify-center">
-            <Plus className="w-4 h-4 text-[#d4a656]" strokeWidth={2} />
+          <div className="w-8 h-8 rounded-md bg-[#0f0f0f] border border-[#262626] flex items-center justify-center">
+            <Plus className="w-4 h-4 text-[#ffffff]" strokeWidth={2} />
           </div>
-          <h2 className="font-heading text-xl font-semibold text-[#e8e6e1]">Open New Investigation</h2>
+          <h2 className="font-body text-xl font-semibold text-[#fafafa]">Open New Investigation</h2>
         </div>
         <div className="flex gap-3">
           <div className="flex-1 relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b6660] font-mono">@</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#737373] font-mono">@</span>
             <Input
               data-testid="username-input"
               type="text"
@@ -121,26 +121,26 @@ const ProfileTracker = () => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAddAccount()}
-              className="pl-9 bg-[#0f0f0f] border-[#1f1f1f] focus:border-[#d4a656] focus:ring-[#d4a656] text-[#e8e6e1] font-mono h-11"
+              className="pl-9 bg-[#000000] border-[#1a1a1a] focus:border-[#ffffff] focus:ring-[#ffffff] text-[#fafafa] font-mono h-11"
             />
           </div>
           <Button
             data-testid="add-account-btn"
             onClick={handleAddAccount}
             disabled={adding}
-            className="bg-[#d4a656] hover:bg-[#c48f3e] text-[#0a0a0a] h-11 px-6 font-medium"
+            className="bg-[#ffffff] hover:bg-[#e5e5e5] text-[#000000] h-11 px-6 font-medium"
           >
             {adding ? 'Fetching...' : 'Track'}
           </Button>
         </div>
-        <p className="text-xs text-[#6b6660] mt-3">Live data via Apify. Fetch may take 10-30 seconds on first request.</p>
+        <p className="text-xs text-[#737373] mt-3">Live data via Apify. Fetch may take 10-30 seconds on first request.</p>
       </div>
 
       <div className="space-y-5">
         {trackedAccounts.length === 0 && (
-          <div className="card-vintage rounded-md p-12 text-center">
-            <div className="font-heading text-2xl text-[#8a857e]">No profiles under observation yet.</div>
-            <p className="text-sm text-[#6b6660] mt-2">Enter a username above to begin.</p>
+          <div className="card-modern rounded-md p-12 text-center">
+            <div className="font-body text-2xl text-[#a1a1aa]">No profiles under observation yet.</div>
+            <p className="text-sm text-[#737373] mt-2">Enter a username above to begin.</p>
           </div>
         )}
 
@@ -151,11 +151,11 @@ const ProfileTracker = () => {
             <div
               key={account.id}
               data-testid={`profile-card-${account.username}`}
-              className="card-vintage rounded-md p-6"
+              className="card-modern rounded-md p-6"
               style={{ animation: `fadeInUp 0.4s ease-out ${idx * 0.05}s backwards` }}
             >
               {loading[account.username] && !profile ? (
-                <div className="py-8 text-center text-[#6b6660] text-sm">Loading @{account.username}...</div>
+                <div className="py-8 text-center text-[#737373] text-sm">Loading @{account.username}...</div>
               ) : profile ? (
                 <>
                   <div className="flex items-start justify-between mb-6">
@@ -164,41 +164,41 @@ const ProfileTracker = () => {
                         <img
                           src={proxyImage(profile.profile_pic)}
                           alt={profile.username}
-                          className="w-20 h-20 rounded-full border-2 border-[#d4a656]/60 object-cover"
+                          className="w-20 h-20 rounded-full border-2 border-[#ffffff]/60 object-cover"
                           onError={(e) => { e.target.style.display = 'none'; }}
                         />
                       ) : (
-                        <div className="w-20 h-20 rounded-full bg-[#1a1613] border-2 border-[#d4a656]/40 flex items-center justify-center">
-                          <span className="text-[#d4a656] font-mono text-2xl">
+                        <div className="w-20 h-20 rounded-full bg-[#0f0f0f] border-2 border-[#ffffff]/40 flex items-center justify-center">
+                          <span className="text-[#ffffff] font-mono text-2xl">
                             {profile.username.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-mono text-xl font-semibold text-[#e8e6e1]">
+                          <h3 className="font-mono text-xl font-semibold text-[#fafafa]">
                             @{profile.username}
                           </h3>
                           {profile.is_verified && (
-                            <ShieldCheck className="w-5 h-5 text-[#d4a656]" strokeWidth={2} />
+                            <ShieldCheck className="w-5 h-5 text-[#ffffff]" strokeWidth={2} />
                           )}
                           {profile.is_private && (
-                            <Lock className="w-4 h-4 text-[#8a857e]" strokeWidth={1.5} />
+                            <Lock className="w-4 h-4 text-[#a1a1aa]" strokeWidth={1.5} />
                           )}
                           {profile.is_business && (
-                            <Briefcase className="w-4 h-4 text-[#d4a656]" strokeWidth={1.5} />
+                            <Briefcase className="w-4 h-4 text-[#ffffff]" strokeWidth={1.5} />
                           )}
                         </div>
-                        <p className="font-heading text-lg text-[#c9c5be] mb-2">{profile.full_name}</p>
+                        <p className="font-body text-lg text-[#d4d4d8] mb-2">{profile.full_name}</p>
                         {profile.bio && (
-                          <p className="text-sm text-[#8a857e] whitespace-pre-wrap max-w-2xl">{profile.bio}</p>
+                          <p className="text-sm text-[#a1a1aa] whitespace-pre-wrap max-w-2xl">{profile.bio}</p>
                         )}
                         {profile.external_url && (
                           <a
                             href={profile.external_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-[#d4a656] hover:text-[#e6d09e] mt-2"
+                            className="inline-flex items-center gap-1 text-xs text-[#ffffff] hover:text-[#f5f5f5] mt-2"
                           >
                             <ExternalLink className="w-3 h-3" />
                             {profile.external_url}
@@ -211,36 +211,36 @@ const ProfileTracker = () => {
                       onClick={() => handleRemove(account.username)}
                       variant="ghost"
                       size="sm"
-                      className="text-[#6b6660] hover:text-[#c15147] hover:bg-transparent"
+                      className="text-[#737373] hover:text-[#dc2626] hover:bg-transparent"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 py-5 border-y border-[#1f1f1f] mb-6">
+                  <div className="grid grid-cols-3 gap-4 py-5 border-y border-[#1a1a1a] mb-6">
                     <div className="text-center">
-                      <div className="font-mono text-3xl font-bold text-[#e8e6e1]">
+                      <div className="font-mono text-3xl font-bold text-[#fafafa]">
                         {profile.posts?.toLocaleString()}
                       </div>
-                      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6b6660] mt-1">Posts</div>
+                      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#737373] mt-1">Posts</div>
                     </div>
-                    <div className="text-center border-x border-[#1f1f1f]">
-                      <div className="font-mono text-3xl font-bold text-[#d4a656]">
+                    <div className="text-center border-x border-[#1a1a1a]">
+                      <div className="font-mono text-3xl font-bold text-[#ffffff]">
                         {profile.followers?.toLocaleString()}
                       </div>
-                      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6b6660] mt-1">Followers</div>
+                      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#737373] mt-1">Followers</div>
                     </div>
                     <div className="text-center">
-                      <div className="font-mono text-3xl font-bold text-[#e8e6e1]">
+                      <div className="font-mono text-3xl font-bold text-[#fafafa]">
                         {profile.following?.toLocaleString()}
                       </div>
-                      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6b6660] mt-1">Following</div>
+                      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#737373] mt-1">Following</div>
                     </div>
                   </div>
 
                   {profile.recent_posts && profile.recent_posts.length > 0 && (
                     <div className="mb-6">
-                      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6b6660] mb-3">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#737373] mb-3">
                         Recent Evidence
                       </div>
                       <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
@@ -250,7 +250,7 @@ const ProfileTracker = () => {
                             href={post.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="relative aspect-square rounded-sm overflow-hidden border border-[#1f1f1f] hover:border-[#d4a656] group"
+                            className="relative aspect-square rounded-sm overflow-hidden border border-[#1a1a1a] hover:border-[#ffffff] group"
                           >
                             {post.display_url && (
                               <img
@@ -280,7 +280,7 @@ const ProfileTracker = () => {
                     data-testid={`insights-btn-${account.username}`}
                     onClick={() => fetchInsights(account.username)}
                     disabled={loadingInsights[account.username]}
-                    className="w-full bg-[#1a1613] hover:bg-[#221c17] border border-[#d4a656]/40 hover:border-[#d4a656] text-[#d4a656]"
+                    className="w-full bg-[#0f0f0f] hover:bg-[#1a1a1a] border border-[#ffffff]/40 hover:border-[#ffffff] text-[#ffffff]"
                   >
                     <Sparkles className="w-4 h-4 mr-2" />
                     {loadingInsights[account.username] ? 'Analysing...' : insight ? 'Regenerate AI Insight' : 'Generate AI Insight'}
@@ -289,31 +289,31 @@ const ProfileTracker = () => {
                   {insight && (
                     <div
                       data-testid={`insight-content-${account.username}`}
-                      className="mt-4 p-5 bg-[#0f0d0b] border border-[#d4a656]/20 rounded-md"
+                      className="mt-4 p-5 bg-[#000000] border border-[#ffffff]/20 rounded-md"
                     >
                       {insight.metrics && (
-                        <div className="flex gap-6 mb-4 pb-4 border-b border-[#1f1f1f]">
+                        <div className="flex gap-6 mb-4 pb-4 border-b border-[#1a1a1a]">
                           <div>
-                            <div className="text-[10px] font-mono uppercase text-[#6b6660]">Engagement</div>
-                            <div className="font-mono text-lg text-[#d4a656]">{insight.metrics.engagement_rate}%</div>
+                            <div className="text-[10px] font-mono uppercase text-[#737373]">Engagement</div>
+                            <div className="font-mono text-lg text-[#ffffff]">{insight.metrics.engagement_rate}%</div>
                           </div>
                           <div>
-                            <div className="text-[10px] font-mono uppercase text-[#6b6660]">Posts Analyzed</div>
-                            <div className="font-mono text-lg text-[#e8e6e1]">{insight.metrics.posts_analyzed}</div>
+                            <div className="text-[10px] font-mono uppercase text-[#737373]">Posts Analyzed</div>
+                            <div className="font-mono text-lg text-[#fafafa]">{insight.metrics.posts_analyzed}</div>
                           </div>
                         </div>
                       )}
                       <div
-                        className="text-sm text-[#c9c5be] leading-relaxed whitespace-pre-wrap"
+                        className="text-sm text-[#d4d4d8] leading-relaxed whitespace-pre-wrap"
                         dangerouslySetInnerHTML={{
-                          __html: (insight.insights || '').replace(/\*\*(.*?)\*\*/g, '<span class="font-mono text-[#d4a656] uppercase tracking-wide text-xs">$1</span>')
+                          __html: (insight.insights || '').replace(/\*\*(.*?)\*\*/g, '<span class="font-mono text-[#ffffff] uppercase tracking-wide text-xs">$1</span>')
                         }}
                       />
                     </div>
                   )}
                 </>
               ) : (
-                <div className="text-[#6b6660] text-sm">
+                <div className="text-[#737373] text-sm">
                   @{account.username} — data unavailable. Click refresh below.
                   <Button
                     onClick={() => fetchProfile(account.username)}

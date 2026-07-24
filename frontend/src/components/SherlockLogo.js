@@ -1,17 +1,15 @@
 import { FaUserSecret } from 'react-icons/fa';
 
 /**
- * Sherlock silhouette logo — uses the FontAwesome user-secret icon
- * which is a classic detective silhouette with hat + collar.
- * Rendered on transparent background with amber theme color.
+ * Sherlock silhouette — modern monochrome white detective icon.
+ * No background, no glow. Clean and geometric.
  */
-const SherlockLogo = ({ size = 44, className = '', color = '#d4a656' }) => {
+const SherlockLogo = ({ size = 32, className = '', color = '#ffffff' }) => {
   return (
     <FaUserSecret
       size={size}
       color={color}
       className={className}
-      style={{ filter: 'drop-shadow(0 0 8px rgba(212, 166, 86, 0.25))' }}
     />
   );
 };

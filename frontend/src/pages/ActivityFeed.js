@@ -69,27 +69,27 @@ const ActivityFeed = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10">
-        <div className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656] mb-3 inline-block pl-6">
+        <div className="inline-block text-[10px] font-mono uppercase tracking-[0.3em] text-[#ffffff] mb-3 inline-block pl-6">
           Surveillance Log
         </div>
-        <h1 className="font-heading text-5xl sm:text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2">
+        <h1 className="text-5xl sm:text-6xl font-bold font-semibold tracking-tight text-[#fafafa] mb-2">
           Activity Feed
         </h1>
-        <p className="text-[#8a857e]">Recent movements from tracked profiles, unified.</p>
-        <div className="divider-ornate mt-6 max-w-md"></div>
+        <p className="text-[#a1a1aa]">Recent movements from tracked profiles, unified.</p>
+        <div className="divider mt-6 max-w-md"></div>
       </div>
 
       {loading ? (
-        <div className="card-vintage rounded-md p-12 text-center text-[#6b6660]">
+        <div className="card-modern rounded-md p-12 text-center text-[#737373]">
           Loading activity...
         </div>
       ) : trackedAccounts.length === 0 ? (
-        <div className="card-vintage rounded-md p-12 text-center">
-          <div className="font-heading text-2xl text-[#8a857e]">Nothing to observe.</div>
-          <p className="text-sm text-[#6b6660] mt-2">Track a profile to see activity here.</p>
+        <div className="card-modern rounded-md p-12 text-center">
+          <div className="font-body text-2xl text-[#a1a1aa]">Nothing to observe.</div>
+          <p className="text-sm text-[#737373] mt-2">Track a profile to see activity here.</p>
         </div>
       ) : allActivities.length === 0 ? (
-        <div className="card-vintage rounded-md p-12 text-center text-[#6b6660]">
+        <div className="card-modern rounded-md p-12 text-center text-[#737373]">
           Fetching recent posts from tracked profiles...
         </div>
       ) : (
@@ -101,46 +101,46 @@ const ActivityFeed = () => {
               target="_blank"
               rel="noopener noreferrer"
               data-testid={`activity-item-${idx}`}
-              className="card-vintage rounded-md p-5 flex items-start gap-4 group"
+              className="card-modern rounded-md p-5 flex items-start gap-4 group"
               style={{ animation: `fadeInUp 0.4s ease-out ${Math.min(idx, 10) * 0.03}s backwards` }}
             >
               {activity.media_url ? (
                 <img
                   src={proxyImage(activity.media_url)}
                   alt=""
-                  className="w-20 h-20 rounded-sm object-cover border border-[#1f1f1f]"
+                  className="w-20 h-20 rounded-sm object-cover border border-[#1a1a1a]"
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
               ) : (
-                <div className="w-20 h-20 rounded-sm bg-[#1a1613] border border-[#2a2622] flex items-center justify-center">
-                  <ImageIcon className="w-6 h-6 text-[#d4a656]" strokeWidth={1.5} />
+                <div className="w-20 h-20 rounded-sm bg-[#0f0f0f] border border-[#262626] flex items-center justify-center">
+                  <ImageIcon className="w-6 h-6 text-[#ffffff]" strokeWidth={1.5} />
                 </div>
               )}
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="font-mono text-sm font-semibold text-[#e8e6e1]">@{activity.username}</span>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#d4a656]">
+                  <span className="font-mono text-sm font-semibold text-[#fafafa]">@{activity.username}</span>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#ffffff]">
                     {activity.post_type}
                   </span>
                   {activity.post_type === 'Video' && (
-                    <Film className="w-3 h-3 text-[#d4a656]" />
+                    <Film className="w-3 h-3 text-[#ffffff]" />
                   )}
-                  <span className="text-xs text-[#6b6660] ml-auto">{formatDate(activity.timestamp)}</span>
+                  <span className="text-xs text-[#737373] ml-auto">{formatDate(activity.timestamp)}</span>
                 </div>
-                <p className="text-sm text-[#c9c5be] line-clamp-2 mb-3">
+                <p className="text-sm text-[#d4d4d8] line-clamp-2 mb-3">
                   {activity.content || 'New post'}
                 </p>
                 <div className="flex items-center gap-5 text-xs">
-                  <div className="flex items-center gap-1.5 text-[#c15147]">
+                  <div className="flex items-center gap-1.5 text-[#dc2626]">
                     <Heart className="w-3.5 h-3.5" strokeWidth={2} />
                     <span className="font-mono">{formatNumber(activity.likes)}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-[#8a857e]">
+                  <div className="flex items-center gap-1.5 text-[#a1a1aa]">
                     <MessageCircle className="w-3.5 h-3.5" strokeWidth={2} />
                     <span className="font-mono">{formatNumber(activity.comments)}</span>
                   </div>
-                  <div className="ml-auto text-[#6b6660] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                  <div className="ml-auto text-[#737373] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                     <span className="text-[10px] font-mono uppercase">View post</span>
                     <ExternalLink className="w-3 h-3" />
                   </div>

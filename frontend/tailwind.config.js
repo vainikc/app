@@ -5,9 +5,9 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        heading: ['Cormorant Garamond', 'serif'],
-        body: ['Inter Tight', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        heading: ['Geist', 'ui-sans-serif', 'system-ui'],
+        body: ['Geist', 'ui-sans-serif', 'system-ui'],
+        mono: ['Geist Mono', 'JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         border: 'hsl(var(--border))',
@@ -42,18 +42,6 @@ module.exports = {
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
-        },
-        amber: {
-          50: '#faf6ee',
-          100: '#f0e4c9',
-          200: '#e6d09e',
-          300: '#dcbc74',
-          400: '#d4a656',
-          500: '#c48f3e',
-          600: '#a87433',
-          700: '#8b5f2b',
-          800: '#6f4c24',
-          900: '#4a331a',
         },
       },
       borderRadius: {

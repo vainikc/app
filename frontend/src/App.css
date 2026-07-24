@@ -1,22 +1,4 @@
 .App {
   min-height: 100vh;
-  background-color: #0a0a0a;
-}
-
-/* Legacy alias - now uses card-vintage from index.css */
-.card-detective {
-  background: linear-gradient(135deg, #141414 0%, #0f0f0f 100%);
-  border: 1px solid #1f1f1f;
-  position: relative;
-  transition: border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.card-detective:hover {
-  border-color: #d4a656;
-  transform: translateY(-2px);
-  box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(212, 166, 86, 0.08);
-}
-
-.amber-glow {
-  box-shadow: 0 0 20px rgba(212, 166, 86, 0.15);
+  background-color: #000;
 }

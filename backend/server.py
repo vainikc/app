@@ -293,9 +293,21 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
     # Most recent = top of Instagram's list (reverse-chronological for 'following')
     most_recent = current_list[:20] if connection_type == 'following' else []
 
+    # Smart-scoped list: only show the N newest users where N = numeric count-diff
+    # Since Instagram returns following list newest-first, current_list[:N] are exactly
+    # the N users followed in the period. Works even without a full-list baseline.
+    smart_recent = []
+    if connection_type == 'following' and net_change is not None and net_change > 0:
+        smart_recent = current_list[:min(net_change, len(current_list))]
+    elif connection_type == 'followers' and net_change is not None and net_change > 0:
+        # Followers list ordering isn't guaranteed reverse-chronological by IG, but
+        # top-of-list is still the best public proxy for "recent"
+        smart_recent = current_list[:min(net_change, len(current_list))]
+
     return {
         "current": current_list,
         "most_recent": most_recent,
+        "smart_recent": smart_recent,
         "added_details": [user_map.get(u, {"username": u}) for u in added_usernames],
         "removed_usernames": removed_usernames,
         "profile_count": real_total,

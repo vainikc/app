@@ -34,181 +34,144 @@ const Dashboard = () => {
 
   const totals = data.totals || {};
   const stats = [
-    { label: 'Active Cases', value: totals.tracked || 0, icon: Users, hint: 'Under observation' },
-    { label: 'Combined Reach', value: formatNumber(totals.followers || 0), icon: TrendingUp, hint: 'Followers indexed' },
-    { label: 'Connections', value: formatNumber(totals.following || 0), icon: Waypoints, hint: 'Network mapped' },
-    { label: 'Evidence', value: formatNumber(totals.posts || 0), icon: FileImage, hint: 'Posts catalogued' },
+    { label: 'Tracked', value: totals.tracked || 0, icon: Users },
+    { label: 'Followers', value: formatNumber(totals.followers || 0), icon: TrendingUp },
+    { label: 'Following', value: formatNumber(totals.following || 0), icon: Waypoints },
+    { label: 'Posts', value: formatNumber(totals.posts || 0), icon: FileImage },
   ];
-
-  const currentDate = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  });
 
   return (
     <div className="p-10 max-w-[1600px]">
-      <div className="mb-10 flex items-start justify-between">
+      <div className="mb-10 flex items-start justify-between gap-6">
         <div>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="corner-ornament text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656]">
-              Case File — Overview
-            </span>
-          </div>
-          <h1 className="font-heading text-6xl font-semibold tracking-tight text-[#e8e6e1] mb-2 text-glow-amber">
+          <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-white mb-3">
             Dashboard
           </h1>
-          <p className="text-[#8a857e] max-w-xl">
-            A quiet room, a lamp, and the whole city of Instagram to observe.
-            Here's what the data whispers today.
+          <p className="text-[15px] text-[#a1a1aa] max-w-xl leading-relaxed">
+            Live overview of every Instagram account under observation.
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#6b6660]">Report Date</div>
-          <div className="text-sm text-[#c9c5be] font-mono mt-1">{currentDate}</div>
-        </div>
+        <button
+          onClick={() => navigate('/tracker')}
+          data-testid="add-account-nav-btn"
+          className="btn-primary px-4 py-2.5 rounded-md text-sm flex items-center gap-2 shrink-0"
+        >
+          <span>New investigation</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
 
-      <div className="divider-ornate mb-10"></div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-10">
         {stats.map((stat, idx) => {
           const Icon = stat.icon;
           return (
             <div
               key={idx}
-              data-testid={`stat-card-${stat.label.toLowerCase().replace(/ /g, '-')}`}
-              className="card-vintage rounded-md p-6 group"
-              style={{ animation: `fadeInUp 0.5s ease-out ${idx * 0.06}s backwards` }}
+              data-testid={`stat-card-${stat.label.toLowerCase()}`}
+              className="card-modern rounded-lg p-5 group"
+              style={{ animation: `fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.04}s backwards` }}
             >
-              <div className="flex items-start justify-between mb-8">
-                <div className="w-10 h-10 rounded-md flex items-center justify-center bg-[#1a1613] border border-[#2a2622] group-hover:border-[#d4a656] group-hover:bg-[#221a12] transition-colors duration-300">
-                  <Icon className="w-5 h-5 text-[#d4a656]" strokeWidth={1.5} />
-                </div>
-                <ArrowUpRight className="w-4 h-4 text-[#4a4640] group-hover:text-[#d4a656] transition-colors duration-300" strokeWidth={1.5} />
+              <div className="flex items-center justify-between mb-6">
+                <Icon className="w-4 h-4 text-[#737373]" strokeWidth={1.75} />
+                <ArrowUpRight className="w-3.5 h-3.5 text-[#404040] group-hover:text-white transition-colors" strokeWidth={1.75} />
               </div>
-              <div className="font-mono text-4xl font-bold text-[#e8e6e1] mb-2 tracking-tight">
+              <div className="text-3xl font-bold text-white tracking-tight mb-1">
                 {stat.value}
               </div>
-              <div className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#d4a656]/80 mb-1">
+              <div className="text-xs text-[#737373]">
                 {stat.label}
-              </div>
-              <div className="text-xs text-[#6b6660]">
-                {stat.hint}
               </div>
             </div>
           );
         })}
       </div>
 
-      <div className="card-vintage rounded-md p-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-6 h-[1px] bg-[#d4a656]"></span>
-              <span className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#d4a656]">
-                Cases in Session
-              </span>
-            </div>
-            <h2 className="font-heading text-4xl font-semibold text-[#e8e6e1]">Active Investigations</h2>
-          </div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-white">Active investigations</h2>
+        <span className="text-xs text-[#737373]">{data.accounts.length} {data.accounts.length === 1 ? 'case' : 'cases'}</span>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-32 rounded-lg skeleton"></div>
+          ))}
+        </div>
+      ) : data.accounts.length === 0 ? (
+        <div className="card-modern rounded-lg p-16 text-center">
+          <div className="text-xl font-medium text-white mb-2">No cases open</div>
+          <p className="text-sm text-[#a1a1aa] mb-6 max-w-md mx-auto">
+            Track any public Instagram profile to begin. We'll observe, record, and analyze —
+            you get the intelligence.
+          </p>
           <button
             onClick={() => navigate('/tracker')}
-            data-testid="add-account-nav-btn"
-            className="btn-detective flex items-center gap-2 px-5 py-2.5 rounded-md text-sm"
+            data-testid="add-first-account-btn"
+            className="btn-primary px-5 py-2.5 rounded-md text-sm"
           >
-            <span>Open New Case</span>
-            <ArrowRight className="w-4 h-4" />
+            Track your first account
           </button>
         </div>
-
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-32 rounded-md skeleton"></div>
-            ))}
-          </div>
-        ) : data.accounts.length === 0 ? (
-          <div className="text-center py-20 border border-dashed border-[#1f1f1f] rounded-md relative">
-            <div className="absolute inset-0 animate-shimmer opacity-30 rounded-md pointer-events-none"></div>
-            <div className="font-heading text-3xl text-[#8a857e] mb-3">The office is quiet.</div>
-            <p className="text-sm text-[#6b6660] mb-6 max-w-md mx-auto">
-              Begin an investigation by tracking any public Instagram profile.
-              We'll observe, record, and analyze — you get the intelligence.
-            </p>
-            <button
-              onClick={() => navigate('/tracker')}
-              data-testid="add-first-account-btn"
-              className="btn-detective px-6 py-3 rounded-md text-sm"
-            >
-              Open First Case
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.accounts.map((account, idx) => {
-              const profile = account.profile;
-              const caseId = `#${String(idx + 1).padStart(4, '0')}`;
-              return (
-                <div
-                  key={account.id}
-                  data-testid={`account-card-${account.username}`}
-                  onClick={() => navigate('/tracker')}
-                  className="cursor-pointer bg-[#111111] border border-[#1f1f1f] hover:border-[#d4a656] rounded-md p-5 transition-all duration-300 group"
-                  style={{ animation: `fadeInUp 0.4s ease-out ${idx * 0.05}s backwards` }}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      {profile?.profile_pic ? (
-                        <img
-                          src={proxyImage(profile.profile_pic)}
-                          alt={account.username}
-                          className="w-12 h-12 rounded-full border border-[#d4a656]/40 object-cover ring-2 ring-transparent group-hover:ring-[#d4a656]/20 transition-all"
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-[#1a1613] border border-[#2a2622] flex items-center justify-center">
-                          <span className="text-[#d4a656] font-mono text-lg">
-                            {account.username.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-mono text-sm font-semibold text-[#e8e6e1] truncate">
-                          @{account.username}
-                        </div>
-                        {profile?.full_name && (
-                          <div className="text-xs text-[#8a857e] truncate">{profile.full_name}</div>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-[9px] font-mono text-[#4a4640]">{caseId}</span>
-                  </div>
-
-                  {profile ? (
-                    <div className="grid grid-cols-3 gap-2 pt-3 border-t border-[#1f1f1f]">
-                      <div>
-                        <div className="font-mono text-sm text-[#e8e6e1]">{formatNumber(profile.posts)}</div>
-                        <div className="text-[9px] uppercase text-[#6b6660] font-mono tracking-wider">Posts</div>
-                      </div>
-                      <div>
-                        <div className="font-mono text-sm text-[#d4a656]">{formatNumber(profile.followers)}</div>
-                        <div className="text-[9px] uppercase text-[#6b6660] font-mono tracking-wider">Followers</div>
-                      </div>
-                      <div>
-                        <div className="font-mono text-sm text-[#e8e6e1]">{formatNumber(profile.following)}</div>
-                        <div className="text-[9px] uppercase text-[#6b6660] font-mono tracking-wider">Following</div>
-                      </div>
-                    </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {data.accounts.map((account, idx) => {
+            const profile = account.profile;
+            return (
+              <div
+                key={account.id}
+                data-testid={`account-card-${account.username}`}
+                onClick={() => navigate('/tracker')}
+                className="cursor-pointer card-modern rounded-lg p-5 group"
+                style={{ animation: `fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.05}s backwards` }}
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  {profile?.profile_pic ? (
+                    <img
+                      src={proxyImage(profile.profile_pic)}
+                      alt={account.username}
+                      className="w-10 h-10 rounded-full object-cover border border-[#262626]"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
                   ) : (
-                    <div className="pt-3 border-t border-[#1f1f1f]">
-                      <div className="text-xs text-[#c15147]">Profile fetch failed</div>
+                    <div className="w-10 h-10 rounded-full bg-[#141414] border border-[#262626] flex items-center justify-center">
+                      <span className="text-[#a1a1aa] font-mono text-sm">
+                        {account.username.charAt(0).toUpperCase()}
+                      </span>
                     </div>
                   )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-sm font-medium text-white truncate">
+                      @{account.username}
+                    </div>
+                    {profile?.full_name && (
+                      <div className="text-xs text-[#737373] truncate">{profile.full_name}</div>
+                    )}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+
+                {profile ? (
+                  <div className="grid grid-cols-3 gap-2 pt-3 border-t border-[#141414]">
+                    <div>
+                      <div className="font-mono text-sm text-white">{formatNumber(profile.posts)}</div>
+                      <div className="text-[10px] text-[#525252] font-mono">Posts</div>
+                    </div>
+                    <div>
+                      <div className="font-mono text-sm text-white">{formatNumber(profile.followers)}</div>
+                      <div className="text-[10px] text-[#525252] font-mono">Followers</div>
+                    </div>
+                    <div>
+                      <div className="font-mono text-sm text-white">{formatNumber(profile.following)}</div>
+                      <div className="text-[10px] text-[#525252] font-mono">Following</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-3 border-t border-[#141414] text-xs text-[#ef4444]">Fetch failed</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
