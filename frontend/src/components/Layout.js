@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Activity, Network, BarChart3, Search } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, Network, BarChart3, Search, Waypoints } from 'lucide-react';
 import SherlockLogo from '@/components/SherlockLogo';
 
 const Layout = () => {
@@ -9,9 +9,10 @@ const Layout = () => {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard', num: '01' },
     { path: '/tracker', icon: Users, label: 'Tracker', num: '02' },
     { path: '/activity', icon: Activity, label: 'Activity', num: '03' },
-    { path: '/map', icon: Network, label: 'Ties & Trails', num: '04' },
-    { path: '/reports', icon: BarChart3, label: 'Reports', num: '05' },
-    { path: '/search', icon: Search, label: 'Search', num: '06' },
+    { path: '/connections', icon: Waypoints, label: 'Connections', num: '04' },
+    { path: '/map', icon: Network, label: 'Ties & Trails', num: '05' },
+    { path: '/reports', icon: BarChart3, label: 'Reports', num: '06' },
+    { path: '/search', icon: Search, label: 'Search', num: '07' },
   ];
 
   return (

@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 4 verifies v3.0 refactor: apify_client.py module, /api/dashboard aggregate endpoint, followers-list / following-list / connection-history / post-comments endpoints, slowapi rate limiting on 8 endpoints, and new /connections frontend page with 3 tabs. Backend pytest: 27/27 PASSED including new tests for /api/dashboard, /api/profile/{u}/followers-list, /api/profile/{u}/following-list, /api/profile/{u}/connection-history, /api/profile/{u}/post-comments, and /api/search rate-limit (30/min). Root now returns v3.0 message. AI insights endpoint verified with real GPT-5.4 output (4 required sections). image-proxy returns real Instagram CDN JPEG bytes. blocked (external): scraping_solutions~instagram-scraper-followers-following-no-cookies actor has hit its FREE_API_DAILY_LIMIT_REACHED (1,000 items/day, 5 runs/day on Apify free tier) — verified from Apify run log id 0KAOzyfpOlefyRYRL. Consequently the followers-list and following-list live data is unavailable today; the endpoints correctly return {current: [], total_count: 0, ...} shape and the frontend gracefully shows 'No data returned. Try again in a few moments' with a 'Loaded 0 followers' toast. Direct Apify comment-scraper actor still works: /api/profile/natgeo/post-comments returns 10 real comments from @tatiana42271, @liz_lee925, @aalapuzova and others. Frontend /connections page renders correctly with account selector, 3 tabs (Followers, Following, Comments on Posts), disclaimer about IG not exposing (a) comments-on-others and (b) liked posts, and Fetch Live Data button. Sidebar has 7 numbered nav items 01-07 with Connections between Activity and Ties & Trails. Dashboard confirmed to now use single /api/dashboard aggregate call (no more N+1 /api/profile fan-out). Rate limiting verified working end-to-end: fired 100 GET /api/search?q= — got 60 x 200 and 40 x 429 (limit 30/min per IP × 2 ingress IPs).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/profile/{u}/followers-list, following-list", "issue": "blocked: needs-key-or-topup — Apify actor scraping_solutions~instagram-scraper-followers-following-no-cookies has hit FREE_API_DAILY_LIMIT_REACHED (5 runs / 1000 items per day). Endpoints correctly handle empty response but empty result is cached for 6h (CACHE_TTL_LONG). This means users will see 0 followers/following until 2026-07-25 00:00 UTC (quota reset) AND cache expires. Consider not caching empty/error results, or offer manual cache-bust."},
+      {"endpoint": "APScheduler startup", "issue": "Intermittent 'Apify API token not configured' error from scheduler during uvicorn reload cycles (WatchFiles-triggered). Once module fully loads env, the error clears. Consider defensive env-check in scheduler job with skip-if-not-ready."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Connections / Followers + Following tabs", "issue": "Cannot verify live user cards render today because upstream Apify actor quota is exhausted. UI correctly falls back to 'No data returned' empty state. Once quota resets, this should show real 200 follower cards (verified in curl earlier this session: got 200 real follower records with usernames + profile_pics + verified/private badges before quota exhausted).", "affected_selectors": ["[data-testid='fetch-connections-btn']", "UserCard rendering"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Do NOT cache empty/error results in fetch_connection_list — currently _cache_set([], ttl=6h) locks users out for 6h on transient Apify failures (quota, timeout, transient 5xx). Only cache successful non-empty results.",
+    "Consider upgrading Apify plan or switching to a different followers/following actor since the free tier 1,000-item/5-run daily limit will block real usage.",
+    "Optional: return 429 to caller when connection-list Apify actor returns empty due to FREE_API_DAILY_LIMIT_REACHED, so frontend can display a specific 'Daily quota exhausted, try tomorrow' message instead of generic 'No data returned'.",
+    "Optional: harden scheduler job with an env-ready check that skips the run and re-queues if APIFY_API_TOKEN is not yet loaded (prevents transient 'not configured' errors during uvicorn reload)."
+  ],
+  "critical_code_review_comments": [
+    "apify_client.py fetch_connection_list caches EMPTY results for 6h on Apify errors (line 167-169 catches HTTPException and returns [], then line 184 _cache_set caches that empty list). This is the biggest bug of this iteration — a single transient failure locks the endpoint for 6h with no way to retry.",
+    "In-memory _cache dict in apify_client.py is unbounded and shared across all connections/profiles/comments. Consider cachetools.TTLCache with maxsize to avoid memory growth for busy deployments.",
+    "server.py is now 519 lines, still a monolith. apify_client.py module extraction is a good start; consider further splitting into routes/ (dashboard.py, connections.py, insights.py, image_proxy.py) and scheduler.py.",
+    "The scheduler job snapshot_all_tracked_accounts iterates accounts sequentially with fixed asyncio.sleep(3) between each — for 100+ accounts this blocks the scheduler for 5+ minutes; consider asyncio.gather with a semaphore.",
+    "slowapi rate limit key uses get_remote_address which returns request.client.host — inside K8s ingress this is the ingress IP, not the true user IP. Ingress load-balances across ~2 replicas so a legitimate user gets effectively 60/min instead of the intended 30/min. Consider extracting X-Forwarded-For or X-Real-IP.",
+    "Aggregated /api/dashboard endpoint does a sequential loop of fetch_profile calls (line 324-337 server.py). For N tracked accounts this is O(N) sequential Apify calls even if each is cached. For fresh calls this is very slow. Consider asyncio.gather for parallel fetch_profile calls.",
+    "AI insights now correctly raises HTTPException(502) on LLM failure (server.py:440) — great fix from previous iteration's minor issue.",
+    "connection_snapshots collection can grow unbounded per tracked account (one snapshot per followers-list call). No TTL/pruning. Consider a retention policy."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {
+    "backend": "100% (27/27 pytest, all endpoints verified with real Apify data or shape validation)",
+    "frontend": "95% (all 7 pages render, Dashboard aggregate confirmed, Connections page + 3 tabs render, disclaimer present, followers/following user cards unverified due to Apify quota — see integration_issues)"
+  },
+  "test_credentials": "N/A — app has no authentication",
+  "seed_data_creation": "Test run added and removed @natgeo tracked account during pytest lifecycle. @chilichidiu remains as the pre-existing tracked account. Multiple connection_snapshots inserted for @chilichidiu followers/following.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "1) Apify free tier daily quota for actor 'scraping_solutions~instagram-scraper-followers-following-no-cookies' is 5 runs / 1000 items per day and resets at 00:00 UTC. If followers-list/following-list return {current:[], total_count:0} quickly (<5s), the quota is exhausted — test again next UTC day. 2) The scheduler is stable across reloads (verified snapshots at 11:32 and 11:36 UTC today). 3) Root endpoint /api/ now returns 'Sherlock API v3.0 - Live Instagram Intelligence' (was v2.0 before). 4) Rate limit test uses /api/search with 100 requests (60→200, 40→429). Wait 60s between rate-limit tests for the window to clear. 5) apify_client.py is the new module extracted from server.py — treat it as authoritative for fetch_profile, fetch_post_comments, fetch_connection_list, clear_profile_cache.",
+  "rca of the issue": "Connections / followers-list / following-list endpoint returned empty user list in the UI test. RCA: Apify free-tier daily quota (5 runs / 1000 items per day) hit for the 'scraping_solutions~instagram-scraper-followers-following-no-cookies' actor — verified by inspecting Apify run 0KAOzyfpOlefyRYRL log which shows 'FREE_API_DAILY_LIMIT_REACHED' and 'daily_item_quota_reached, remaining_items_before: 0'. Our backend correctly catches HTTPException from _apify_run and returns []. BUG SURFACED: The empty result is then cached for 6 hours (CACHE_TTL_LONG=21600), which means even after quota resets at 00:00 UTC, users will still see empty results for up to 6 hours because the cache serves stale empty data. Mitigation: In apify_client.fetch_connection_list, only call _cache_set(cache_key, results) when results is non-empty (or extract the try/except to skip caching on failure). Reproduction: 1) Trigger the followers-list endpoint until Apify quota exhausted (this takes only 5 calls). 2) Observe subsequent calls return empty in <5s (cache hit on empty). 3) Even a limit=999 (new cache key) also returns empty because the Apify actor itself refuses due to quota. The frontend gracefully shows 'No data returned. Try again in a few moments.' which is correct UX for the failure state."
+}

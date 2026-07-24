@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Users, TrendingUp, Activity, FileImage, ArrowUpRight, ArrowRight } from 'lucide-react';
+import { Users, TrendingUp, FileImage, ArrowUpRight, ArrowRight, Waypoints } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { proxyImage } from '@/lib/imageProxy';
 
@@ -15,44 +15,29 @@ const formatNumber = (n) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [trackedAccounts, setTrackedAccounts] = useState([]);
-  const [profiles, setProfiles] = useState({});
+  const [data, setData] = useState({ accounts: [], totals: {} });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchTrackedAccounts();
+    fetchDashboard();
   }, []);
 
-  const fetchTrackedAccounts = async () => {
+  const fetchDashboard = async () => {
     try {
-      const res = await axios.get(`${API}/accounts`);
-      setTrackedAccounts(res.data);
-      setLoading(false);
-      res.data.forEach((acc) => fetchProfile(acc.username));
+      const res = await axios.get(`${API}/dashboard`);
+      setData(res.data);
     } catch (error) {
-      console.error('Error fetching accounts:', error);
-      setLoading(false);
+      console.error('Dashboard error:', error);
     }
+    setLoading(false);
   };
 
-  const fetchProfile = async (username) => {
-    try {
-      const res = await axios.get(`${API}/profile/${username}`);
-      setProfiles((prev) => ({ ...prev, [username]: res.data }));
-    } catch (error) {
-      console.error(`Error fetching ${username}:`, error);
-    }
-  };
-
-  const totalFollowers = Object.values(profiles).reduce((sum, p) => sum + (p.followers || 0), 0);
-  const totalPosts = Object.values(profiles).reduce((sum, p) => sum + (p.posts || 0), 0);
-  const totalFollowing = Object.values(profiles).reduce((sum, p) => sum + (p.following || 0), 0);
-
+  const totals = data.totals || {};
   const stats = [
-    { label: 'Active Cases', value: trackedAccounts.length, icon: Users, hint: 'Under observation', suffix: '' },
-    { label: 'Combined Reach', value: formatNumber(totalFollowers), icon: TrendingUp, hint: 'Followers indexed', suffix: '' },
-    { label: 'Connections', value: formatNumber(totalFollowing), icon: Activity, hint: 'Total network', suffix: '' },
-    { label: 'Evidence', value: formatNumber(totalPosts), icon: FileImage, hint: 'Posts catalogued', suffix: '' },
+    { label: 'Active Cases', value: totals.tracked || 0, icon: Users, hint: 'Under observation' },
+    { label: 'Combined Reach', value: formatNumber(totals.followers || 0), icon: TrendingUp, hint: 'Followers indexed' },
+    { label: 'Connections', value: formatNumber(totals.following || 0), icon: Waypoints, hint: 'Network mapped' },
+    { label: 'Evidence', value: formatNumber(totals.posts || 0), icon: FileImage, hint: 'Posts catalogued' },
   ];
 
   const currentDate = new Date().toLocaleDateString('en-US', {
@@ -141,7 +126,7 @@ const Dashboard = () => {
               <div key={i} className="h-32 rounded-md skeleton"></div>
             ))}
           </div>
-        ) : trackedAccounts.length === 0 ? (
+        ) : data.accounts.length === 0 ? (
           <div className="text-center py-20 border border-dashed border-[#1f1f1f] rounded-md relative">
             <div className="absolute inset-0 animate-shimmer opacity-30 rounded-md pointer-events-none"></div>
             <div className="font-heading text-3xl text-[#8a857e] mb-3">The office is quiet.</div>
@@ -159,8 +144,8 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {trackedAccounts.map((account, idx) => {
-              const profile = profiles[account.username];
+            {data.accounts.map((account, idx) => {
+              const profile = account.profile;
               const caseId = `#${String(idx + 1).padStart(4, '0')}`;
               return (
                 <div
@@ -215,7 +200,7 @@ const Dashboard = () => {
                     </div>
                   ) : (
                     <div className="pt-3 border-t border-[#1f1f1f]">
-                      <div className="h-4 skeleton rounded-sm"></div>
+                      <div className="text-xs text-[#c15147]">Profile fetch failed</div>
                     </div>
                   )}
                 </div>

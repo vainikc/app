@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -9,103 +9,44 @@ import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+from apify_client import (
+    fetch_profile,
+    fetch_post_comments,
+    fetch_connection_list,
+    clear_profile_cache,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+mongo_client = AsyncIOMotorClient(mongo_url)
+db = mongo_client[os.environ['DB_NAME']]
 
-APIFY_TOKEN = os.environ.get('APIFY_API_TOKEN')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-
-app = FastAPI()
-api_router = APIRouter(prefix="/api")
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# In-memory cache for profile data (TTL 15 min) to reduce Apify usage & speed up UI
-profile_cache = {}
-CACHE_TTL = 900  # 15 minutes
+# Rate limiter (per IP)
+limiter = Limiter(key_func=get_remote_address)
 
+# Scheduler (declared before startup handler)
+scheduler = AsyncIOScheduler(timezone="UTC")
 
-async def fetch_instagram_profile(username: str) -> dict:
-    """Fetch real Instagram profile data via Apify Instagram Profile Scraper."""
-    cache_key = f"profile_{username}"
-    now = datetime.now(timezone.utc).timestamp()
+app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    if cache_key in profile_cache:
-        cached = profile_cache[cache_key]
-        if now - cached['timestamp'] < CACHE_TTL:
-            return cached['data']
-
-    if not APIFY_TOKEN:
-        raise HTTPException(status_code=500, detail="Apify API token not configured")
-
-    url = f"https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items?token={APIFY_TOKEN}"
-    payload = {"usernames": [username]}
-
-    async with httpx.AsyncClient(timeout=120.0) as http:
-        try:
-            resp = await http.post(url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Apify HTTP error: {e.response.status_code} - {e.response.text[:200]}")
-            raise HTTPException(status_code=502, detail=f"Apify error: {e.response.status_code}")
-        except Exception as e:
-            logger.error(f"Apify request failed: {e}")
-            raise HTTPException(status_code=502, detail="Failed to fetch profile data")
-
-    if not data or len(data) == 0:
-        raise HTTPException(status_code=404, detail=f"Instagram profile @{username} not found")
-
-    p = data[0]
-    if p.get('error'):
-        raise HTTPException(status_code=404, detail=f"Instagram profile @{username} not found or is inaccessible")
-
-    category_raw = p.get('businessCategoryName')
-    if not category_raw or str(category_raw).lower() in ('none', 'null', ''):
-        category_raw = 'personal'
-
-    profile = {
-        'username': p.get('username', username),
-        'full_name': p.get('fullName') or p.get('username', username),
-        'bio': p.get('biography', ''),
-        'followers': p.get('followersCount', 0),
-        'following': p.get('followsCount', 0),
-        'posts': p.get('postsCount', 0),
-        'profile_pic': p.get('profilePicUrlHD') or p.get('profilePicUrl', ''),
-        'is_verified': p.get('verified', False),
-        'is_private': p.get('private', False),
-        'is_business': p.get('isBusinessAccount', False),
-        'external_url': p.get('externalUrl') or '',
-        'category': category_raw,
-        'recent_posts': [],
-    }
-
-    latest = p.get('latestPosts', []) or []
-    for post in latest[:12]:
-        profile['recent_posts'].append({
-            'id': post.get('id') or post.get('shortCode', ''),
-            'shortcode': post.get('shortCode', ''),
-            'caption': (post.get('caption') or '')[:200],
-            'likes': post.get('likesCount', 0),
-            'comments': post.get('commentsCount', 0),
-            'timestamp': post.get('timestamp', ''),
-            'display_url': post.get('displayUrl', ''),
-            'type': post.get('type', 'Image'),
-            'url': post.get('url', ''),
-        })
-
-    profile_cache[cache_key] = {'timestamp': now, 'data': profile}
-    return profile
+api_router = APIRouter(prefix="/api")
 
 
 class TrackedAccount(BaseModel):
@@ -116,16 +57,26 @@ class TrackedAccount(BaseModel):
     last_updated: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
+# ========== Core endpoints ==========
+
 @api_router.get("/")
 async def root():
-    return {"message": "Sherlock API v2.0 - Live Instagram Data"}
+    return {"message": "Sherlock API v3.0 - Live Instagram Intelligence"}
 
 
 @api_router.get("/image-proxy")
-async def image_proxy(url: str = Query(...)):
-    """Proxy Instagram CDN images to bypass Cross-Origin-Resource-Policy header."""
-    if not url or ('cdninstagram.com' not in url and 'fbcdn.net' not in url and 'instagram.com' not in url):
-        raise HTTPException(status_code=400, detail="Invalid image URL")
+@limiter.limit("300/minute")
+async def image_proxy(request: Request, url: str = Query(...)):
+    """Proxy Instagram CDN images to bypass Cross-Origin-Resource-Policy."""
+    from urllib.parse import urlparse
+    try:
+        host = urlparse(url).hostname or ""
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid URL")
+
+    allowed = ('cdninstagram.com', 'fbcdn.net', 'instagram.com')
+    if not any(host.endswith(d) or host == d for d in allowed):
+        raise HTTPException(status_code=400, detail="Invalid image host")
 
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as http:
         try:
@@ -137,12 +88,17 @@ async def image_proxy(url: str = Query(...)):
             logger.error(f"Image proxy failed: {e}")
             raise HTTPException(status_code=502, detail="Failed to fetch image")
 
+    if len(r.content) > 5_000_000:
+        raise HTTPException(status_code=413, detail="Image too large")
+
     return Response(
         content=r.content,
         media_type=r.headers.get('content-type', 'image/jpeg'),
         headers={"Cache-Control": "public, max-age=3600"}
     )
 
+
+# ========== Tracked accounts CRUD ==========
 
 @api_router.get("/accounts")
 async def get_tracked_accounts():
@@ -151,7 +107,8 @@ async def get_tracked_accounts():
 
 
 @api_router.post("/accounts")
-async def add_tracked_account(username: str):
+@limiter.limit("30/minute")
+async def add_tracked_account(request: Request, username: str):
     username = username.strip().lstrip('@').lower()
     if not username:
         raise HTTPException(status_code=400, detail="Username required")
@@ -160,14 +117,11 @@ async def add_tracked_account(username: str):
     if existing:
         raise HTTPException(status_code=400, detail="Account already tracked")
 
-    # Verify the account exists on Instagram (real data)
-    profile = await fetch_instagram_profile(username)
+    profile = await fetch_profile(username)
 
     account = TrackedAccount(username=profile['username'])
-    doc = account.model_dump()
-    await db.tracked_accounts.insert_one(doc)
+    await db.tracked_accounts.insert_one(account.model_dump())
 
-    # Store initial snapshot for history tracking
     await db.follower_snapshots.insert_one({
         "username": profile['username'],
         "followers": profile['followers'],
@@ -185,22 +139,23 @@ async def remove_tracked_account(username: str):
     result = await db.tracked_accounts.delete_one({"username": username})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Account not found")
+    # Clean up related data
+    await db.follower_snapshots.delete_many({"username": username})
+    await db.connection_snapshots.delete_many({"username": username})
     return {"message": "Account removed"}
 
 
-@api_router.get("/profile/{username}")
-async def get_profile(username: str):
-    username = username.strip().lstrip('@').lower()
-    profile = await fetch_instagram_profile(username)
+# ========== Profile data ==========
 
-    # Auto-snapshot for tracked accounts
+@api_router.get("/profile/{username}")
+async def get_profile_endpoint(username: str):
+    username = username.strip().lstrip('@').lower()
+    profile = await fetch_profile(username)
+
     tracked = await db.tracked_accounts.find_one({"username": username})
     if tracked:
-        # Only insert snapshot if last one is > 1 hour old
         last = await db.follower_snapshots.find_one(
-            {"username": username},
-            {"_id": 0},
-            sort=[("timestamp", -1)]
+            {"username": username}, {"_id": 0}, sort=[("timestamp", -1)]
         )
         should_snapshot = True
         if last:
@@ -226,17 +181,15 @@ async def get_profile(username: str):
 async def get_follower_history(username: str):
     username = username.strip().lstrip('@').lower()
     snapshots = await db.follower_snapshots.find(
-        {"username": username},
-        {"_id": 0}
+        {"username": username}, {"_id": 0}
     ).sort("timestamp", 1).to_list(500)
     return snapshots
 
 
 @api_router.get("/profile/{username}/activity")
 async def get_activity(username: str):
-    """Return recent posts as activity feed."""
     username = username.strip().lstrip('@').lower()
-    profile = await fetch_instagram_profile(username)
+    profile = await fetch_profile(username)
 
     activity = []
     for post in profile.get('recent_posts', []):
@@ -253,55 +206,184 @@ async def get_activity(username: str):
     return activity
 
 
-@api_router.get("/relationships")
-async def get_relationships():
-    """Build relationship graph based on tracked accounts."""
+# ========== Connections (followers/following + diffs) ==========
+
+async def _snapshot_connections(username: str, connection_type: str, limit: int = 100):
+    """Fetch and snapshot connections. Returns diff vs. previous snapshot."""
+    current_list = await fetch_connection_list(username, connection_type, limit)
+    current_usernames = [c['username'] for c in current_list if c.get('username')]
+
+    # Get last snapshot for this type
+    last = await db.connection_snapshots.find_one(
+        {"username": username, "type": connection_type},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+
+    added = []
+    removed = []
+    if last:
+        prev_usernames = set(last.get('usernames', []))
+        current_set = set(current_usernames)
+        added = list(current_set - prev_usernames)
+        removed = list(prev_usernames - current_set)
+
+    # Save new snapshot
+    await db.connection_snapshots.insert_one({
+        "username": username,
+        "type": connection_type,
+        "usernames": current_usernames,
+        "count": len(current_usernames),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+
+    # Build detail maps
+    user_map = {c['username']: c for c in current_list if c.get('username')}
+    return {
+        "current": current_list,
+        "added_details": [user_map.get(u, {"username": u}) for u in added],
+        "removed_usernames": removed,
+        "total_count": len(current_list),
+    }
+
+
+@api_router.get("/profile/{username}/followers-list")
+@limiter.limit("10/minute")
+async def get_followers_list(request: Request, username: str, limit: int = Query(100, ge=1, le=500)):
+    """Fetch current followers list + detect new/lost since last snapshot."""
+    username = username.strip().lstrip('@').lower()
+    return await _snapshot_connections(username, "followers", limit)
+
+
+@api_router.get("/profile/{username}/following-list")
+@limiter.limit("10/minute")
+async def get_following_list(request: Request, username: str, limit: int = Query(100, ge=1, le=500)):
+    """Fetch current following list + detect who was recently followed/unfollowed."""
+    username = username.strip().lstrip('@').lower()
+    return await _snapshot_connections(username, "following", limit)
+
+
+@api_router.get("/profile/{username}/connection-history")
+async def get_connection_history(username: str, connection_type: str = "followers"):
+    """Return historical snapshots showing connection count over time."""
+    username = username.strip().lstrip('@').lower()
+    snapshots = await db.connection_snapshots.find(
+        {"username": username, "type": connection_type},
+        {"_id": 0, "usernames": 0}  # exclude big usernames arrays
+    ).sort("timestamp", 1).to_list(200)
+    return snapshots
+
+
+# ========== Comments on their posts ==========
+
+@api_router.get("/profile/{username}/post-comments")
+@limiter.limit("15/minute")
+async def get_recent_post_comments(request: Request, username: str, posts_limit: int = 3, comments_limit: int = 20):
+    """
+    Fetch comments FROM OTHER USERS on this account's recent posts.
+    NOTE: Instagram does NOT publicly expose comments that a user has made
+    on OTHER accounts' posts, nor posts they've liked.
+    """
+    username = username.strip().lstrip('@').lower()
+    profile = await fetch_profile(username)
+    posts = profile.get('recent_posts', [])[:posts_limit]
+
+    all_comments = []
+    for post in posts:
+        post_url = post.get('url')
+        if not post_url:
+            continue
+        try:
+            comments = await fetch_post_comments(post_url, comments_limit)
+            for c in comments:
+                c['post_url'] = post_url
+                c['post_caption'] = post.get('caption', '')[:80]
+                c['post_thumbnail'] = post.get('display_url', '')
+            all_comments.extend(comments)
+        except Exception as e:
+            logger.error(f"Failed to fetch comments for {post_url}: {e}")
+            continue
+
+    # Sort by likes desc
+    all_comments.sort(key=lambda c: c.get('likes', 0), reverse=True)
+    return all_comments
+
+
+# ========== Aggregated dashboard endpoint ==========
+
+@api_router.get("/dashboard")
+async def get_dashboard():
+    """Aggregated data for the dashboard, avoiding N+1 client-side fetches."""
     accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(200)
 
-    nodes = []
-    links = []
+    accounts_with_data = []
+    total_followers = 0
+    total_following = 0
+    total_posts = 0
 
     for acc in accounts:
         username = acc['username']
-        # Use cached data if available; skip Apify call for relationship view
-        cache_key = f"profile_{username}"
-        cached = profile_cache.get(cache_key)
-        if cached:
-            p = cached['data']
-            nodes.append({
-                "id": username,
-                "label": username,
-                "category": p.get('category', 'personal'),
-                "followers": p.get('followers', 0),
-                "verified": p.get('is_verified', False)
+        try:
+            profile = await fetch_profile(username)  # uses cache
+            accounts_with_data.append({
+                **acc,
+                "profile": profile
             })
-        else:
-            nodes.append({
-                "id": username,
-                "label": username,
-                "category": 'unknown',
-                "followers": 0,
-                "verified": False
-            })
+            total_followers += profile.get('followers', 0)
+            total_following += profile.get('following', 0)
+            total_posts += profile.get('posts', 0)
+        except Exception as e:
+            logger.error(f"Dashboard fetch failed for {username}: {e}")
+            accounts_with_data.append({**acc, "profile": None})
 
-    # Create links between accounts sharing category
+    return {
+        "accounts": accounts_with_data,
+        "totals": {
+            "tracked": len(accounts),
+            "followers": total_followers,
+            "following": total_following,
+            "posts": total_posts
+        }
+    }
+
+
+# ========== Relationships graph ==========
+
+@api_router.get("/relationships")
+async def get_relationships():
+    accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(200)
+
+    nodes = []
+    for acc in accounts:
+        username = acc['username']
+        try:
+            profile = await fetch_profile(username)  # uses cache
+            nodes.append({
+                "id": username,
+                "label": username,
+                "category": profile.get('category', 'personal'),
+                "followers": profile.get('followers', 0),
+                "verified": profile.get('is_verified', False)
+            })
+        except Exception:
+            nodes.append({"id": username, "label": username, "category": "unknown", "followers": 0, "verified": False})
+
+    links = []
     for i, node_a in enumerate(nodes):
         for node_b in nodes[i+1:]:
-            if node_a['category'] == node_b['category'] and node_a['category'] != 'unknown':
-                links.append({
-                    "source": node_a['id'],
-                    "target": node_b['id'],
-                    "value": 5
-                })
+            if node_a['category'] == node_b['category'] and node_a['category'] not in ('unknown', 'personal'):
+                links.append({"source": node_a['id'], "target": node_b['id'], "value": 5})
 
     return {"nodes": nodes, "links": links}
 
 
-@api_router.get("/insights/{username}")
-async def get_ai_insights(username: str):
-    username = username.strip().lstrip('@').lower()
+# ========== AI Insights ==========
 
-    profile = await fetch_instagram_profile(username)
+@api_router.get("/insights/{username}")
+@limiter.limit("10/minute")
+async def get_ai_insights(request: Request, username: str):
+    username = username.strip().lstrip('@').lower()
+    profile = await fetch_profile(username)
 
     if not EMERGENT_LLM_KEY:
         return {"insights": "AI insights unavailable. Emergent LLM key not configured."}
@@ -355,18 +437,19 @@ Provide analysis in this exact format:
         }
     except Exception as e:
         logger.error(f"LLM error: {e}")
-        return {"insights": f"Unable to generate AI insights: {str(e)[:200]}"}
+        raise HTTPException(status_code=502, detail=f"AI insights generation failed: {str(e)[:200]}")
 
+
+# ========== Search ==========
 
 @api_router.get("/search")
-async def search_profile(q: str):
-    """Search returns a single profile preview for exact username match."""
+@limiter.limit("30/minute")
+async def search_profile(request: Request, q: str):
     q = q.strip().lstrip('@').lower()
     if not q:
         return []
-
     try:
-        profile = await fetch_instagram_profile(q)
+        profile = await fetch_profile(q)
         return [profile]
     except HTTPException:
         return []
@@ -375,39 +458,18 @@ async def search_profile(q: str):
         return []
 
 
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-    client.close()
-
-
-# Scheduled task: snapshot all tracked accounts every 6 hours for historical trend data
-scheduler = AsyncIOScheduler(timezone="UTC")
-
+# ========== Scheduler ==========
 
 async def snapshot_all_tracked_accounts():
-    """Automatically capture follower snapshots for all tracked accounts."""
+    """Snapshot follower counts for all tracked accounts."""
     try:
         accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(200)
         logger.info(f"[Scheduler] Running snapshot for {len(accounts)} tracked accounts")
         for acc in accounts:
             username = acc['username']
             try:
-                # Force fresh fetch by removing from cache
-                profile_cache.pop(f"profile_{username}", None)
-                profile = await fetch_instagram_profile(username)
+                clear_profile_cache(username)
+                profile = await fetch_profile(username)
                 await db.follower_snapshots.insert_one({
                     "username": username,
                     "followers": profile['followers'],
@@ -416,8 +478,7 @@ async def snapshot_all_tracked_accounts():
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 })
                 logger.info(f"[Scheduler] Snapshot saved for @{username}: {profile['followers']} followers")
-                # Space out Apify calls to avoid rate limits
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
             except Exception as e:
                 logger.error(f"[Scheduler] Failed to snapshot @{username}: {e}")
     except Exception as e:
@@ -432,7 +493,27 @@ async def start_scheduler():
         hours=6,
         id='auto_snapshot',
         replace_existing=True,
-        next_run_time=datetime.now(timezone.utc)  # Run first job in ~immediately after startup
+        next_run_time=datetime.now(timezone.utc)
     )
     scheduler.start()
     logger.info("[Scheduler] Started auto-snapshot job (every 6h)")
+
+
+@app.on_event("shutdown")
+async def shutdown_handler():
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    mongo_client.close()
+
+
+# ========== Wire up ==========
+
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

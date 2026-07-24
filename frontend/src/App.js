@@ -6,6 +6,7 @@ import ActivityFeed from '@/pages/ActivityFeed';
 import RelationshipMap from '@/pages/RelationshipMap';
 import Reports from '@/pages/Reports';
 import Search from '@/pages/Search';
+import Connections from '@/pages/Connections';
 import { Toaster } from '@/components/ui/sonner';
 import '@/App.css';
 
@@ -18,6 +19,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="tracker" element={<ProfileTracker />} />
             <Route path="activity" element={<ActivityFeed />} />
+            <Route path="connections" element={<Connections />} />
             <Route path="map" element={<RelationshipMap />} />
             <Route path="reports" element={<Reports />} />
             <Route path="search" element={<Search />} />
