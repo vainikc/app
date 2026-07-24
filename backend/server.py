@@ -510,6 +510,246 @@ async def get_relationships():
 
 # ========== AI Insights ==========
 
+# In-memory cache for LLM insights to avoid re-spending tokens on every request.
+# TTL applied via timestamp check.
+_insight_cache: dict = {}
+_INSIGHT_CACHE_TTL = 3600  # 1 hour
+
+
+def _insight_cache_get(key: str):
+    entry = _insight_cache.get(key)
+    if not entry:
+        return None
+    if (datetime.now(timezone.utc).timestamp() - entry['ts']) > _INSIGHT_CACHE_TTL:
+        _insight_cache.pop(key, None)
+        return None
+    return entry['data']
+
+
+def _insight_cache_set(key: str, data):
+    _insight_cache[key] = {'ts': datetime.now(timezone.utc).timestamp(), 'data': data}
+
+
+async def _compute_trends(username: str, since_days: int = 7):
+    """Compute follow/unfollow trend data for a tracked account from stored snapshots."""
+    trends = {
+        "follower_change": None,
+        "following_change": None,
+        "period_days": since_days,
+        "recent_follows": [],       # usernames added since first known snapshot
+        "recent_unfollows": [],     # usernames removed
+        "has_baseline": False,
+    }
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
+
+    # Follower/following count trend
+    baseline_counts = await db.follower_snapshots.find_one(
+        {"username": username, "timestamp": {"$lte": cutoff}},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+    if not baseline_counts:
+        baseline_counts = await db.follower_snapshots.find_one(
+            {"username": username},
+            {"_id": 0},
+            sort=[("timestamp", 1)]
+        )
+    latest_counts = await db.follower_snapshots.find_one(
+        {"username": username},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+    if baseline_counts and latest_counts:
+        trends["follower_change"] = latest_counts.get('followers', 0) - baseline_counts.get('followers', 0)
+        trends["following_change"] = latest_counts.get('following', 0) - baseline_counts.get('following', 0)
+        trends["has_baseline"] = True
+
+    # Following-list diff for identity of newly followed / unfollowed
+    baseline_snap = await db.connection_snapshots.find_one(
+        {"username": username, "type": "following", "timestamp": {"$lte": cutoff}},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+    if not baseline_snap:
+        baseline_snap = await db.connection_snapshots.find_one(
+            {"username": username, "type": "following"},
+            {"_id": 0},
+            sort=[("timestamp", 1)]
+        )
+    latest_snap = await db.connection_snapshots.find_one(
+        {"username": username, "type": "following"},
+        {"_id": 0},
+        sort=[("timestamp", -1)]
+    )
+    if baseline_snap and latest_snap and baseline_snap.get('timestamp') != latest_snap.get('timestamp'):
+        prev = set(baseline_snap.get('usernames', []))
+        curr = set(latest_snap.get('usernames', []))
+        trends["recent_follows"] = [u for u in latest_snap.get('usernames', []) if u in (curr - prev)][:8]
+        trends["recent_unfollows"] = list(prev - curr)[:8]
+
+    return trends
+
+
+def _format_trends_for_prompt(trends: dict) -> str:
+    if not trends["has_baseline"]:
+        return "(No historical baseline yet — account was just added.)"
+    parts = []
+    fc = trends["follower_change"]
+    fgc = trends["following_change"]
+    period = trends["period_days"]
+    if fc is not None:
+        parts.append(f"Follower change (last ~{period}d): {fc:+d}")
+    if fgc is not None:
+        parts.append(f"Following change (last ~{period}d): {fgc:+d}")
+    if trends["recent_follows"]:
+        parts.append(f"Recently followed: {', '.join('@' + u for u in trends['recent_follows'])}")
+    if trends["recent_unfollows"]:
+        parts.append(f"Recently unfollowed: {', '.join('@' + u for u in trends['recent_unfollows'])}")
+    return "\n".join(parts) if parts else "(Baseline exists but no notable change in period.)"
+
+
+def _calc_engagement_rate(profile: dict) -> float:
+    posts = profile.get('recent_posts') or []
+    followers = profile.get('followers', 0)
+    if not posts or not followers:
+        return 0.0
+    total = sum(p.get('likes', 0) + p.get('comments', 0) for p in posts)
+    return (total / len(posts) / followers) * 100
+
+
+@api_router.get("/insights/dashboard/summaries")
+@limiter.limit("10/minute")
+async def get_dashboard_ai_summaries(request: Request):
+    """One-sentence AI summary per tracked account. Cached for 1h."""
+    if not EMERGENT_LLM_KEY:
+        return {"summaries": [], "error": "Emergent LLM key not configured"}
+
+    accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(200)
+    summaries = []
+
+    for acc in accounts:
+        username = acc['username']
+        cache_key = f"summary_{username}"
+        cached = _insight_cache_get(cache_key)
+        if cached:
+            summaries.append(cached)
+            continue
+
+        try:
+            profile = await fetch_profile(username)
+            engagement = _calc_engagement_rate(profile)
+            trends = await _compute_trends(username, since_days=7)
+            trend_block = _format_trends_for_prompt(trends)
+
+            prompt = f"""Give exactly ONE sentence (max 25 words) capturing the most interesting thing about this Instagram account right now. Blunt, no fluff, no adjectives spam.
+
+@{profile['username']} — {profile.get('full_name','')} — {profile.get('bio','')[:120]}
+{profile['followers']:,} followers, {profile['following']:,} following, {profile['posts']} posts
+Engagement rate: {engagement:.2f}%
+{trend_block}"""
+
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"summary-{username}-{datetime.now(timezone.utc).timestamp()}",
+                system_message="You are a sharp Instagram intelligence analyst. Output only ONE plain sentence, no markdown, no quotes."
+            ).with_model("openai", "gpt-5.4")
+
+            response = await chat.send_message(UserMessage(text=prompt))
+            summary_text = (response or "").strip().strip('"').strip()
+
+            entry = {
+                "username": username,
+                "summary": summary_text,
+                "engagement_rate": round(engagement, 2),
+                "follower_change_7d": trends["follower_change"],
+                "following_change_7d": trends["following_change"],
+            }
+            _insight_cache_set(cache_key, entry)
+            summaries.append(entry)
+        except Exception as e:
+            logger.error(f"Dashboard summary failed for @{username}: {e}")
+            summaries.append({
+                "username": username,
+                "summary": "Summary unavailable.",
+                "engagement_rate": 0,
+                "follower_change_7d": None,
+                "following_change_7d": None,
+            })
+
+    return {"summaries": summaries}
+
+
+@api_router.get("/insights/compare")
+@limiter.limit("10/minute")
+async def compare_tracked_accounts(request: Request):
+    """LLM-generated head-to-head comparison across every tracked account. Cached for 1h."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="Emergent LLM key not configured")
+
+    accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(200)
+    if len(accounts) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 tracked accounts to compare")
+
+    cache_key = "compare_" + "_".join(sorted(a['username'] for a in accounts))
+    cached = _insight_cache_get(cache_key)
+    if cached:
+        return cached
+
+    lines = []
+    account_metrics = []
+    for acc in accounts:
+        username = acc['username']
+        try:
+            profile = await fetch_profile(username)
+            engagement = _calc_engagement_rate(profile)
+            trends = await _compute_trends(username, since_days=7)
+            metrics = {
+                "username": username,
+                "full_name": profile.get('full_name', ''),
+                "followers": profile.get('followers', 0),
+                "following": profile.get('following', 0),
+                "posts": profile.get('posts', 0),
+                "engagement_rate": round(engagement, 2),
+                "follower_change_7d": trends["follower_change"],
+                "following_change_7d": trends["following_change"],
+            }
+            account_metrics.append(metrics)
+            lines.append(
+                f"@{username} ({profile.get('full_name','')}): {profile.get('followers',0):,} followers, "
+                f"{profile.get('following',0):,} following, {profile.get('posts',0)} posts, "
+                f"{engagement:.2f}% engagement, Δfollowers={trends['follower_change']}, Δfollowing={trends['following_change']}"
+            )
+        except Exception as e:
+            logger.error(f"Compare metrics failed for @{username}: {e}")
+            lines.append(f"@{username}: (data unavailable)")
+
+    prompt = f"""Compare these {len(accounts)} Instagram accounts head-to-head. Be blunt, quantitative, and marketing-focused.
+
+{chr(10).join(lines)}
+
+Output in this exact format:
+
+**Who's winning right now**: [Which handle has the strongest position and why, 2 sentences]
+**Engagement head-to-head**: [Compare engagement rates numerically, 2 sentences]
+**Growth trajectory**: [Compare follower deltas and follow behavior, 2 sentences]
+**Playbook opportunity**: [What each account should learn from the other, 2 sentences]"""
+
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"compare-{datetime.now(timezone.utc).timestamp()}",
+            system_message="You are a sharp Instagram intelligence analyst. Sharp, data-driven, no fluff."
+        ).with_model("openai", "gpt-5.4")
+
+        response = await chat.send_message(UserMessage(text=prompt))
+        result = {"comparison": response, "accounts": account_metrics}
+        _insight_cache_set(cache_key, result)
+        return result
+    except Exception as e:
+        logger.error(f"Compare LLM error: {e}")
+        raise HTTPException(status_code=502, detail=f"AI comparison failed: {str(e)[:200]}")
+
+
 @api_router.get("/insights/{username}")
 @limiter.limit("10/minute")
 async def get_ai_insights(request: Request, username: str):
@@ -523,11 +763,9 @@ async def get_ai_insights(request: Request, username: str):
     for post in profile.get('recent_posts', [])[:5]:
         posts_summary += f"\n- {post.get('likes', 0)} likes, {post.get('comments', 0)} comments: {post.get('caption', '')[:100]}"
 
-    engagement_rate = 0.0
-    if profile.get('recent_posts') and profile.get('followers', 0) > 0:
-        total_engagement = sum(p.get('likes', 0) + p.get('comments', 0) for p in profile['recent_posts'])
-        avg = total_engagement / len(profile['recent_posts'])
-        engagement_rate = (avg / profile['followers']) * 100
+    engagement_rate = _calc_engagement_rate(profile)
+    trends = await _compute_trends(username, since_days=7)
+    trend_block = _format_trends_for_prompt(trends)
 
     prompt = f"""Analyze this Instagram account and provide a concise marketing intelligence brief in 4 sections:
 
@@ -541,13 +779,16 @@ Verified: {profile['is_verified']}
 Business Account: {profile['is_business']}
 Avg Engagement Rate: {engagement_rate:.2f}%
 
+Recent behavior (last ~7 days):
+{trend_block}
+
 Recent Posts:{posts_summary}
 
 Provide analysis in this exact format:
 
 **Content Strategy**: [2 sentences]
 **Audience Profile**: [2 sentences]
-**Engagement Analysis**: [2 sentences]
+**Behavior & Growth**: [2 sentences — reference the follow/unfollow trend numbers above where relevant]
 **Recommendation**: [2 sentences with actionable advice]"""
 
     try:
@@ -563,7 +804,11 @@ Provide analysis in this exact format:
             "metrics": {
                 "engagement_rate": round(engagement_rate, 2),
                 "followers": profile['followers'],
-                "posts_analyzed": len(profile.get('recent_posts', []))
+                "posts_analyzed": len(profile.get('recent_posts', [])),
+                "follower_change_7d": trends["follower_change"],
+                "following_change_7d": trends["following_change"],
+                "recent_follows": trends["recent_follows"],
+                "recent_unfollows": trends["recent_unfollows"],
             }
         }
     except Exception as e:

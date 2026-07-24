@@ -292,7 +292,7 @@ const ProfileTracker = () => {
                       className="mt-4 p-5 bg-[#000000] border border-[#ffffff]/20 rounded-md"
                     >
                       {insight.metrics && (
-                        <div className="flex gap-6 mb-4 pb-4 border-b border-[#1a1a1a]">
+                        <div className="flex gap-6 mb-4 pb-4 border-b border-[#1a1a1a] flex-wrap">
                           <div>
                             <div className="text-[10px] font-mono uppercase text-[#737373]">Engagement</div>
                             <div className="font-mono text-lg text-[#ffffff]">{insight.metrics.engagement_rate}%</div>
@@ -301,6 +301,22 @@ const ProfileTracker = () => {
                             <div className="text-[10px] font-mono uppercase text-[#737373]">Posts Analyzed</div>
                             <div className="font-mono text-lg text-[#fafafa]">{insight.metrics.posts_analyzed}</div>
                           </div>
+                          {insight.metrics.follower_change_7d != null && (
+                            <div>
+                              <div className="text-[10px] font-mono uppercase text-[#737373]">Δ Followers 7d</div>
+                              <div className={`font-mono text-lg ${insight.metrics.follower_change_7d > 0 ? 'text-[#22c55e]' : insight.metrics.follower_change_7d < 0 ? 'text-[#dc2626]' : 'text-[#fafafa]'}`}>
+                                {insight.metrics.follower_change_7d > 0 ? '+' : ''}{insight.metrics.follower_change_7d}
+                              </div>
+                            </div>
+                          )}
+                          {insight.metrics.following_change_7d != null && (
+                            <div>
+                              <div className="text-[10px] font-mono uppercase text-[#737373]">Δ Following 7d</div>
+                              <div className={`font-mono text-lg ${insight.metrics.following_change_7d > 0 ? 'text-[#22c55e]' : insight.metrics.following_change_7d < 0 ? 'text-[#dc2626]' : 'text-[#fafafa]'}`}>
+                                {insight.metrics.following_change_7d > 0 ? '+' : ''}{insight.metrics.following_change_7d}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       <div
