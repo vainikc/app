@@ -208,27 +208,53 @@ async def get_activity(username: str):
 
 # ========== Connections (followers/following + diffs) ==========
 
-async def _snapshot_connections(username: str, connection_type: str, limit: int = 100):
-    """Fetch and snapshot connections. Returns diff vs. previous snapshot."""
+async def _snapshot_connections(username: str, connection_type: str, limit: int = 100, since_days: int = 7):
+    """
+    Fetch current connections list + compute diff against snapshot from `since_days` ago.
+
+    Important: Instagram's public API returns the following list in REVERSE-CHRONOLOGICAL order
+    (most recently followed appears first). We use position-in-current-list as recency.
+
+    - Newly added users are returned in current-list order → newest follow first.
+    - `since_days=0` uses the most recent previous snapshot (last check).
+    """
     current_list = await fetch_connection_list(username, connection_type, limit)
     current_usernames = [c['username'] for c in current_list if c.get('username')]
+    quota_exhausted = len(current_list) == 0
 
-    # Get last snapshot for this type
-    last = await db.connection_snapshots.find_one(
-        {"username": username, "type": connection_type},
-        {"_id": 0},
-        sort=[("timestamp", -1)]
-    )
+    # Find comparison snapshot
+    if since_days > 0:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
+        # Get most recent snapshot ON OR BEFORE the cutoff
+        old_snapshot = await db.connection_snapshots.find_one(
+            {
+                "username": username,
+                "type": connection_type,
+                "timestamp": {"$lte": cutoff}
+            },
+            {"_id": 0},
+            sort=[("timestamp", -1)]
+        )
+        comparison_label = f"past {since_days} day{'s' if since_days != 1 else ''}"
+    else:
+        old_snapshot = await db.connection_snapshots.find_one(
+            {"username": username, "type": connection_type},
+            {"_id": 0},
+            sort=[("timestamp", -1)]
+        )
+        comparison_label = "last check"
 
-    added = []
-    removed = []
-    if last:
-        prev_usernames = set(last.get('usernames', []))
+    added_usernames = []
+    removed_usernames = []
+    if old_snapshot:
+        prev_usernames = set(old_snapshot.get('usernames', []))
         current_set = set(current_usernames)
-        added = list(current_set - prev_usernames)
-        removed = list(prev_usernames - current_set)
+        added_set = current_set - prev_usernames
+        removed_usernames = list(prev_usernames - current_set)
+        # Preserve current-list order (recency) for added users
+        added_usernames = [u for u in current_usernames if u in added_set]
 
-    # Only save non-empty snapshots (avoid polluting DB with quota-exhausted empty results)
+    # Only save non-empty snapshots
     if current_usernames:
         await db.connection_snapshots.insert_one({
             "username": username,
@@ -239,29 +265,40 @@ async def _snapshot_connections(username: str, connection_type: str, limit: int 
         })
 
     user_map = {c['username']: c for c in current_list if c.get('username')}
+
+    # Build "most recent follows" (top N from current list - always available, no snapshot needed)
+    most_recent = current_list[:20] if connection_type == 'following' else []
+
     return {
         "current": current_list,
-        "added_details": [user_map.get(u, {"username": u}) for u in added],
-        "removed_usernames": removed,
+        "most_recent": most_recent,  # For "following": top 20 = most recently followed
+        "added_details": [user_map.get(u, {"username": u}) for u in added_usernames],
+        "removed_usernames": removed_usernames,
         "total_count": len(current_list),
-        "quota_exhausted": len(current_list) == 0,
+        "quota_exhausted": quota_exhausted,
+        "comparison_period": comparison_label,
+        "has_baseline": old_snapshot is not None,
+        "baseline_timestamp": old_snapshot.get('timestamp') if old_snapshot else None,
     }
 
 
 @api_router.get("/profile/{username}/followers-list")
 @limiter.limit("10/minute")
-async def get_followers_list(request: Request, username: str, limit: int = Query(100, ge=1, le=500)):
-    """Fetch current followers list + detect new/lost since last snapshot."""
+async def get_followers_list(request: Request, username: str, limit: int = Query(100, ge=1, le=500), since_days: int = Query(7, ge=0, le=365)):
+    """Fetch current followers list + detect new/lost since `since_days` ago."""
     username = username.strip().lstrip('@').lower()
-    return await _snapshot_connections(username, "followers", limit)
+    return await _snapshot_connections(username, "followers", limit, since_days)
 
 
 @api_router.get("/profile/{username}/following-list")
 @limiter.limit("10/minute")
-async def get_following_list(request: Request, username: str, limit: int = Query(100, ge=1, le=500)):
-    """Fetch current following list + detect who was recently followed/unfollowed."""
+async def get_following_list(request: Request, username: str, limit: int = Query(100, ge=1, le=500), since_days: int = Query(7, ge=0, le=365)):
+    """
+    Fetch current following list + detect who was followed/unfollowed in past `since_days`.
+    Results are ordered by recency (most recently followed first).
+    """
     username = username.strip().lstrip('@').lower()
-    return await _snapshot_connections(username, "following", limit)
+    return await _snapshot_connections(username, "following", limit, since_days)
 
 
 @api_router.get("/profile/{username}/connection-history")
@@ -462,13 +499,14 @@ async def search_profile(request: Request, q: str):
 # ========== Scheduler ==========
 
 async def snapshot_all_tracked_accounts():
-    """Snapshot follower counts for all tracked accounts."""
+    """Snapshot follower counts + following LIST (for recency diff) for all tracked accounts."""
     try:
         accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(200)
         logger.info(f"[Scheduler] Running snapshot for {len(accounts)} tracked accounts")
         for acc in accounts:
             username = acc['username']
             try:
+                # Profile counts snapshot (cheap - single Apify call)
                 clear_profile_cache(username)
                 profile = await fetch_profile(username)
                 await db.follower_snapshots.insert_one({
@@ -478,8 +516,30 @@ async def snapshot_all_tracked_accounts():
                     "posts": profile['posts'],
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 })
-                logger.info(f"[Scheduler] Snapshot saved for @{username}: {profile['followers']} followers")
+                logger.info(f"[Scheduler] Profile snapshot saved for @{username}: {profile['followers']} followers")
                 await asyncio.sleep(3)
+
+                # Following-list snapshot (uses limited-quota actor - only do once per day per account)
+                last_following = await db.connection_snapshots.find_one(
+                    {"username": username, "type": "following"},
+                    {"_id": 0},
+                    sort=[("timestamp", -1)]
+                )
+                should_snapshot_following = True
+                if last_following:
+                    try:
+                        last_ts = datetime.fromisoformat(last_following["timestamp"])
+                        if (datetime.now(timezone.utc) - last_ts).total_seconds() < 86400:
+                            should_snapshot_following = False
+                    except Exception:
+                        pass
+                if should_snapshot_following:
+                    try:
+                        await _snapshot_connections(username, "following", limit=100, since_days=7)
+                        logger.info(f"[Scheduler] Following-list snapshot saved for @{username}")
+                    except Exception as e:
+                        logger.warning(f"[Scheduler] Following-list snapshot skipped for @{username}: {e}")
+                    await asyncio.sleep(5)
             except Exception as e:
                 logger.error(f"[Scheduler] Failed to snapshot @{username}: {e}")
     except Exception as e:

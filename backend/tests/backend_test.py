@@ -222,24 +222,36 @@ class TestAIInsights:
         assert data["metrics"]["followers"] > 100_000_000
 
 
-# ---------- Followers/Following Lists (new v3.0) ----------
+# ---------- Followers/Following Lists (new v3.0 + since_days v3.1) ----------
 # Use @chilichidiu because it has small follower count (~1400) so scraper returns fast
+# EXPECTED_LIST_KEYS = new shape after since_days feature
+EXPECTED_LIST_KEYS = [
+    "current", "most_recent", "added_details", "removed_usernames", "total_count",
+    "quota_exhausted", "comparison_period", "has_baseline", "baseline_timestamp",
+]
+
+
 class TestConnectionLists:
 
     def test_followers_list_shape(self, http):
         r = http.get(
             f"{BASE_URL}/api/profile/chilichidiu/followers-list",
-            params={"limit": 10},
+            params={"limit": 10, "since_days": 7},
             timeout=LIST_TIMEOUT,
         )
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
         data = r.json()
-        for key in ["current", "added_details", "removed_usernames", "total_count"]:
+        for key in EXPECTED_LIST_KEYS:
             assert key in data, f"Missing key {key}"
         assert isinstance(data["current"], list)
+        assert isinstance(data["most_recent"], list)
         assert isinstance(data["added_details"], list)
         assert isinstance(data["removed_usernames"], list)
         assert isinstance(data["total_count"], int)
+        assert isinstance(data["quota_exhausted"], bool)
+        # For followers, most_recent should be [] per server logic
+        assert data["most_recent"] == []
+        assert data["comparison_period"] == "past 7 days"
         # If any current items, verify shape
         if data["current"]:
             item = data["current"][0]
@@ -249,14 +261,63 @@ class TestConnectionLists:
     def test_following_list_shape(self, http):
         r = http.get(
             f"{BASE_URL}/api/profile/chilichidiu/following-list",
-            params={"limit": 10},
+            params={"limit": 10, "since_days": 7},
             timeout=LIST_TIMEOUT,
         )
         assert r.status_code == 200, f"Got {r.status_code}: {r.text[:300]}"
         data = r.json()
-        for key in ["current", "added_details", "removed_usernames", "total_count"]:
-            assert key in data
+        for key in EXPECTED_LIST_KEYS:
+            assert key in data, f"Missing key {key}"
         assert isinstance(data["current"], list)
+        assert isinstance(data["most_recent"], list)
+        assert data["comparison_period"] == "past 7 days"
+        # For following, most_recent is top-20 of current
+        assert len(data["most_recent"]) <= 20
+        assert len(data["most_recent"]) <= len(data["current"])
+        if data["current"]:
+            # most_recent should be the first N of current
+            n = min(20, len(data["current"]))
+            assert data["most_recent"] == data["current"][:n]
+
+    def test_following_list_since_days_0_last_check(self, http):
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/following-list",
+            params={"limit": 10, "since_days": 0},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["comparison_period"] == "last check"
+        assert isinstance(data["has_baseline"], bool)
+
+    def test_following_list_since_days_1(self, http):
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/following-list",
+            params={"limit": 10, "since_days": 1},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["comparison_period"] == "past 1 day"
+
+    def test_following_list_since_days_30(self, http):
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/following-list",
+            params={"limit": 10, "since_days": 30},
+            timeout=LIST_TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["comparison_period"] == "past 30 days"
+
+    def test_since_days_invalid_out_of_range(self, http):
+        # since_days > 365 or < 0 should 422
+        r = http.get(
+            f"{BASE_URL}/api/profile/chilichidiu/following-list",
+            params={"limit": 10, "since_days": 400},
+            timeout=30,
+        )
+        assert r.status_code == 422
 
     def test_connection_history_grows(self, http):
         # After the two calls above, history should have at least 1 snapshot
