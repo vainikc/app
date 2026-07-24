@@ -1,0 +1,163 @@
+{
+  "theme_context": {
+    "app_name": "Sherlock",
+    "purpose": "Instagram public data tracker and analytics assistant for a marketer",
+    "vibe": "Cyberpunk Detective / Intelligence Analyst. High-tech, data-heavy, stealthy, and authoritative."
+  },
+  "typography": {
+    "strategy": "Swiss Brutalist meets Tech. High contrast weights, technical precision.",
+    "fonts": {
+      "headings": {
+        "family": "Chivo, sans-serif",
+        "css_import": "@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@300;400;700;900&display=swap');",
+        "usage": "Use for all H1-H4. Emphasize tracking-tight and font-black for top-level headers."
+      },
+      "body": {
+        "family": "IBM Plex Sans, sans-serif",
+        "css_import": "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap');",
+        "usage": "Use for general paragraphs, labels, and forms."
+      },
+      "mono": {
+        "family": "JetBrains Mono, monospace",
+        "css_import": "@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');",
+        "usage": "Use exclusively for numeric data, metrics, follower counts, and tags."
+      }
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "metric": "text-3xl sm:text-4xl font-mono font-bold tracking-tight",
+      "overline": "text-xs font-mono uppercase tracking-[0.2em]"
+    }
+  },
+  "colors": {
+    "strategy": "Deep void dark backgrounds (tinted with blue) with highly luminous electric blue and cyber teal accents to highlight data without overwhelming the eyes.",
+    "backgrounds": {
+      "page": "#030712",
+      "card": "#0B101E",
+      "card_hover": "#111827",
+      "glass": "rgba(11, 16, 30, 0.7)"
+    },
+    "borders": {
+      "default": "#1E293B",
+      "focus": "#2563EB"
+    },
+    "text": {
+      "primary": "#F8FAFC",
+      "secondary": "#94A3B8",
+      "muted": "#475569"
+    },
+    "accents": {
+      "primary_electric_blue": "#2563EB",
+      "primary_electric_blue_glow": "#3B82F6",
+      "secondary_teal": "#06B6D4",
+      "secondary_teal_glow": "#22D3EE",
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "danger": "#EF4444"
+    },
+    "chart_palette": [
+      "#2563EB",
+      "#06B6D4",
+      "#8B5CF6",
+      "#3B82F6",
+      "#10B981"
+    ]
+  },
+  "visual_enhancers": {
+    "surfaces": "Grid Borders ('Technical' Look): Use border-collapse style layouts for data tables and feature grids. Use Flat Solid backgrounds with a sharp 1px border for dashboard cards.",
+    "glassmorphism": "Use ONLY for sticky headers or floating navs. backdrop-blur-xl bg-[#0B101E]/70 border-b border-white/10.",
+    "shadows_and_glows": "Replace soft shadows with 1px solid strokes or drop-shadows with colored glow (e.g., drop-shadow-[0_0_8px_rgba(37,99,235,0.4)]) for active elements.",
+    "borders": "Subtle roundness: maximum 8px border-radius (`rounded-md`). Do not use heavily rounded elements."
+  },
+  "layouts": {
+    "dashboard_grid": {
+      "base": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+      "gap": "gap-4 or gap-6",
+      "rules": "High Density Grid mode. Every pixel must be utilized. Use h-full on children to stretch."
+    },
+    "spacing": "Generous Spacing Philosophy: use p-6 or p-8 inside cards to prevent text collision. Use py-12 to py-20 for section separation."
+  },
+  "component_rules": {
+    "buttons": "Sharp/Slightly rounded buttons (rounded-md). Active/Primary buttons use electric blue background with white text and a subtle glow on hover.",
+    "cards": "Cardless or strictly rectangular flat styles. 1px border. On hover: slight lift (-translate-y-1) and border color shifts to electric blue/teal.",
+    "tables": "Dense rows. Left-align text, right-align numbers. Hover states on rows must slightly lighten the background.",
+    "forms": "Use Shadcn customized inputs. Background #0B101E, border #1E293B. Focus ring must be electric blue.",
+    "badges": "For Instagram tags or activity types, use small pill shapes with a very subtle background tint (e.g., bg-blue-500/10 text-blue-400)."
+  },
+  "motion": {
+    "micro_interactions": "Hover states must transition explicitly (e.g., transition-colors duration-200).",
+    "entrances": "Staggered fade-up for list items in Activity Feed and Profile Tracker.",
+    "charts": "Animate chart rendering on load (Recharts supports this natively)."
+  },
+  "3d_libraries_and_steps": {
+    "relationship_map": {
+      "library": "react-force-graph-2d or react-force-graph-3d",
+      "purpose": "Visualizing Ties & Trails / Interaction patterns between accounts.",
+      "implementation": "Use dark mode settings. Nodes should be tinted electric blue and teal based on account category. Links should have a subtle opacity (0.3) that highlights on node hover."
+    },
+    "charts": {
+      "library": "recharts",
+      "purpose": "Activity Reports, engagement trends, follower growth.",
+      "implementation": "Use the chart_palette colors defined in this JSON. Customize tooltips to have dark backgrounds (#0B101E) and white text."
+    }
+  },
+  "media": {
+    "icons": {
+      "library": "lucide-react",
+      "usage": "Use stroke-width 1.5. Tint icons to secondary/muted unless they represent an active state."
+    },
+    "image_urls": [
+      {
+        "category": "mock_instagram_profiles",
+        "description": "Portraits to use as profile pictures in Search, Tracker, and Dashboard.",
+        "urls": [
+          "https://images.unsplash.com/photo-1517462964-21fdcec3f25b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwzfHxmYXNoaW9uJTIwbW9kZWwlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODQ4ODYyNjh8MA&ixlib=rb-4.1.0&q=85",
+          "https://images.unsplash.com/photo-1664515226058-03952a19bd76?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHw0fHxmYXNoaW9uJTIwbW9kZWwlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODQ4ODYyNjh8MA&ixlib=rb-4.1.0&q=85",
+          "https://images.unsplash.com/photo-1611042553484-d61f84d22784?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwbW9kZWwlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODQ4ODYyNjh8MA&ixlib=rb-4.1.0&q=85",
+          "https://images.pexels.com/photos/22742255/pexels-photo-22742255.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+        ]
+      },
+      {
+        "category": "abstract_network_backgrounds",
+        "description": "Use sparingly as a background texture for the AI Insights panel or Hero search section with a heavy black/void overlay.",
+        "urls": [
+          "https://images.pexels.com/photos/8640331/pexels-photo-8640331.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+        ]
+      }
+    ]
+  },
+  "accessibility": {
+    "contrast": "Ensure text over cards has at least a 4.5:1 ratio. The primary action colors (electric blue/teal) must be legible against #030712.",
+    "testing": "All interactive elements, buttons, and chart containers MUST include a `data-testid` attribute (e.g., data-testid='track-profile-btn')."
+  },
+  "instructions_to_main_agent": [
+    "Inject the Google Fonts (@import statements) into src/index.css.",
+    "Update tailwind.config.js to set up the color variables (electric-blue, cyber-teal) and border radius (var(--radius)).",
+    "DO NOT use Inter or standard sans for headings. Apply font-heading (Chivo) for H1-H4 and font-mono (JetBrains Mono) for numbers.",
+    "Ensure dark mode is forced by default.",
+    "Build the dashboard using a sidebar navigation (Sherlock logo, Dash, Tracker, Feed, Map, Reports) and a main content area.",
+    "For the 'Relationship Map', if react-force-graph is too complex to wire up immediately, build a high-fidelity visual placeholder or a simple Recharts node diagram, but prioritize a real graph if possible.",
+    "Use lucide-react for all iconography.",
+    "Apply custom scrollbar styling in index.css (dark track, subtle blue thumb).",
+    "Never use purely transparent backgrounds on floating elements. Always use bg-opacity with backdrop-blur.",
+    "Add 'data-testid' to every actionable UI element."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid the 'AI slop' aesthetic. Make creative, distinctive frontends.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy and subtle 1px borders.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) only where appropriate (headers/navs).",
+    "You MUST NOT apply universal transition (e.g., transition: all). Always add transitions for specific properties.",
+    "You MUST NOT center align the app container (.App { text-align: center; }). This disrupts natural reading flow.",
+    "Always use modern button styles (rounded-md with interaction animations & relevant colors).",
+    "NEVER use emoji characters for icons. Use lucide-react.",
+    "Every interaction needs micro-animations - hover states, transitions, and entrance animations.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Main agent relies on the provided image URLs. Missing categories = main agent uses placeholder text which is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Use sonner for toast notifications."
+  ]
+}
