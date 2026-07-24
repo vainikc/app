@@ -1,9 +1,12 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Activity, Network, BarChart3, Search, Waypoints } from 'lucide-react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Users, Activity, Network, BarChart3, Search, Waypoints, LogOut } from 'lucide-react';
 import SherlockLogo from '@/components/SherlockLogo';
+import { useAuth } from '@/lib/AuthContext';
 
 const Layout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -52,7 +55,25 @@ const Layout = () => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-[#141414]">
+        <div className="p-4 border-t border-[#141414] space-y-3">
+          {user && (
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-mono text-white truncate" data-testid="current-user-email">
+                  {user.email}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider text-[#525252]">{user.role || 'user'}</div>
+              </div>
+              <button
+                onClick={async () => { await logout(); navigate('/login'); }}
+                data-testid="logout-btn"
+                title="Sign out"
+                className="text-[#737373] hover:text-white p-1.5 rounded-md hover:bg-[#0f0f0f] transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" strokeWidth={1.75} />
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-2 text-xs text-[#525252]">
             <div className="dot-live"></div>
             <span>Live data</span>

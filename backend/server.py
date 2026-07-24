@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, Depends
 from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -23,6 +23,7 @@ from apify_client import (
     fetch_connection_list,
     clear_profile_cache,
 )
+from auth import build_auth_router, get_current_user_dep, seed_admin_and_indexes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -46,7 +47,15 @@ app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-api_router = APIRouter(prefix="/api")
+# Auth dependency (JWT-based) - protects all /api routes except auth + image-proxy
+current_user_dep = get_current_user_dep(db)
+
+# Public router: no auth required (auth endpoints, image proxy, health)
+public_router = APIRouter(prefix="/api")
+public_router.include_router(build_auth_router(db))
+
+# Protected router: every route requires a valid JWT
+api_router = APIRouter(prefix="/api", dependencies=[Depends(current_user_dep)])
 
 
 class TrackedAccount(BaseModel):
@@ -64,7 +73,7 @@ async def root():
     return {"message": "Sherlock API v3.0 - Live Instagram Intelligence"}
 
 
-@api_router.get("/image-proxy")
+@public_router.get("/image-proxy")
 @limiter.limit("300/minute")
 async def image_proxy(request: Request, url: str = Query(...)):
     """Proxy Instagram CDN images to bypass Cross-Origin-Resource-Policy."""
@@ -889,6 +898,7 @@ async def snapshot_all_tracked_accounts():
 
 @app.on_event("startup")
 async def start_scheduler():
+    await seed_admin_and_indexes(db)
     scheduler.add_job(
         snapshot_all_tracked_accounts,
         'interval',
@@ -910,12 +920,15 @@ async def shutdown_handler():
 
 # ========== Wire up ==========
 
+app.include_router(public_router)
 app.include_router(api_router)
 
+# Cookies require an explicit origin (not "*"). Use FRONTEND_URL from .env.
+_frontend_origin = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=[_frontend_origin],
     allow_methods=["*"],
     allow_headers=["*"],
 )
