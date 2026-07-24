@@ -162,7 +162,7 @@ const Reports = () => {
               <ResponsiveContainer width="100%" height={320}>
                 <AreaChart data={history}>
                   <defs>
-                    <linearGradient id="amberGrad" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="whiteGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#ffffff" stopOpacity={0.4} />
                       <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
                     </linearGradient>
@@ -179,7 +179,7 @@ const Reports = () => {
                       fontFamily: 'JetBrains Mono',
                     }}
                   />
-                  <Area type="monotone" dataKey="followers" stroke="#ffffff" strokeWidth={2} fill="url(#amberGrad)" />
+                  <Area type="monotone" dataKey="followers" stroke="#ffffff" strokeWidth={2} fill="url(#whiteGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             )}

@@ -223,7 +223,7 @@ const Connections = () => {
 };
 
 
-const BaselineBanner = ({ hasBaseline, hasCountBaseline, netChange, period }) => {
+const BaselineBanner = ({ hasBaseline, hasCountBaseline, netChange, period, smartRecentCount }) => {
   if (!hasBaseline && !hasCountBaseline) {
     return (
       <div className="card-modern rounded-lg p-3.5 mb-4 border-l-2 border-l-[#f59e0b]/70">
@@ -238,14 +238,25 @@ const BaselineBanner = ({ hasBaseline, hasCountBaseline, netChange, period }) =>
     );
   }
   if (!hasBaseline && hasCountBaseline && netChange != null) {
+    const capped = smartRecentCount != null && smartRecentCount < Math.abs(netChange);
     return (
       <div className="card-modern rounded-lg p-3.5 mb-4 border-l-2 border-l-white/40">
         <div className="flex items-start gap-3">
           <Sparkles className="w-3.5 h-3.5 text-white mt-0.5 shrink-0" />
           <div className="text-xs text-[#d4d4d8]">
             <strong className="text-white">Smart-scoped list.</strong>{' '}
-            We know {Math.abs(netChange)} new {netChange > 0 ? 'follows' : 'unfollows'} happened in the {period},
-            so we've narrowed the scrape to exactly those {Math.abs(netChange)} accounts using Instagram's recency ordering.
+            {capped ? (
+              <>
+                {Math.abs(netChange)} {netChange > 0 ? 'new follows' : 'unfollows'} happened in the {period}.
+                Instagram's public API caps the scrape at 200, so we're showing the {smartRecentCount} most recent —
+                the rest can be surfaced once the scheduler builds a full-list baseline.
+              </>
+            ) : (
+              <>
+                We know {Math.abs(netChange)} new {netChange > 0 ? 'follows' : 'unfollows'} happened in the {period},
+                so we've narrowed the scrape to exactly those {Math.abs(netChange)} accounts using Instagram's recency ordering.
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -280,7 +291,7 @@ const FollowingView = ({ data }) => {
         <StatCard label={`Unfollowed in ${period}`} value={netLost != null ? `-${netLost}` : '—'} tone="neg" sublabel={netLost == null ? 'Need baseline' : null} />
       </div>
 
-      <BaselineBanner hasBaseline={hasBaseline} hasCountBaseline={hasCountBaseline} netChange={netChange} period={period} />
+      <BaselineBanner hasBaseline={hasBaseline} hasCountBaseline={hasCountBaseline} netChange={netChange} period={period} smartRecentCount={smartRecent.length} />
 
       {/* SMART SCOPED - the killer feature */}
       {smartRecent.length > 0 && (
@@ -289,9 +300,15 @@ const FollowingView = ({ data }) => {
             <div>
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-white" />
-                {smartRecent.length} accounts followed in the {period}
+                {smartRecent.length === netChange
+                  ? `${smartRecent.length} accounts followed in the ${period}`
+                  : `Top ${smartRecent.length} of ${netChange} accounts followed in the ${period}`}
               </h3>
-              <p className="text-xs text-[#737373] mt-0.5">Ordered by recency — position #1 is most recent</p>
+              <p className="text-xs text-[#737373] mt-0.5">
+                {smartRecent.length === netChange
+                  ? 'Ordered by recency — position #1 is most recent'
+                  : `Scraper capped at 200 · showing the most-recent ${smartRecent.length} of ${netChange}`}
+              </p>
             </div>
             <span className="text-xs text-white bg-white/10 px-2.5 py-1 rounded font-mono">
               {smartRecent.length} NEW
@@ -403,7 +420,7 @@ const FollowersView = ({ data }) => {
         <StatCard label={`Lost in ${period}`} value={netLost != null ? `-${netLost}` : '—'} tone="neg" sublabel={netLost == null ? 'Need baseline' : null} />
       </div>
 
-      <BaselineBanner hasBaseline={hasBaseline} hasCountBaseline={hasCountBaseline} netChange={netChange} period={period} />
+      <BaselineBanner hasBaseline={hasBaseline} hasCountBaseline={hasCountBaseline} netChange={netChange} period={period} smartRecentCount={smartRecent.length} />
 
       {smartRecent.length > 0 && (
         <div className="card-modern-hi rounded-lg p-6 mb-4">
