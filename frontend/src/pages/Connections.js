@@ -406,6 +406,7 @@ const FollowersView = ({ data, timeRange }) => {
   }
   const period = data.comparison_period;
   const hasBaseline = data.has_baseline;
+  const hasCountBaseline = data.has_count_baseline;
   const netChange = data.net_change;
   const profileCount = data.profile_count ?? data.total_count;
   const sampleCount = data.sample_count ?? data.current.length;
@@ -444,6 +445,28 @@ const FollowersView = ({ data, timeRange }) => {
           sublabel={netLost == null ? 'Need baseline data' : null}
         />
       </div>
+
+      {/* Baseline banners (same as FollowingView) */}
+      {!hasBaseline && !hasCountBaseline && (
+        <div className="card-vintage rounded-md p-4 mb-6 border-l-2 border-l-[#f59e0b]">
+          <div className="flex items-start gap-3">
+            <Clock className="w-4 h-4 text-[#f59e0b] mt-0.5 shrink-0" />
+            <div className="text-xs text-[#c9c5be]">
+              <strong className="text-[#f59e0b]">No historical baseline for {period}.</strong> The scheduler snapshots every 6 hours, so after {period} the "New/Lost" numbers will populate.
+            </div>
+          </div>
+        </div>
+      )}
+      {!hasBaseline && hasCountBaseline && netChange != null && (
+        <div className="card-vintage rounded-md p-4 mb-6 border-l-2 border-l-[#d4a656]/60">
+          <div className="flex items-start gap-3">
+            <Info className="w-4 h-4 text-[#d4a656] mt-0.5 shrink-0" />
+            <div className="text-xs text-[#c9c5be]">
+              <strong className="text-[#d4a656]">Numeric baseline only.</strong> We know the count changed by {netChange > 0 ? `+${netChange}` : netChange} in the {period}, but the full-list baseline needed to identify <em>which</em> accounts followed/unfollowed doesn't exist yet. Fetch again in {period.replace('past ', '')} to get named additions/removals.
+            </div>
+          </div>
+        </div>
+      )}
 
       {data.added_details && data.added_details.length > 0 && (
         <div className="card-vintage rounded-md p-6 mb-6 border-l-2 border-l-[#7d9c60]">
