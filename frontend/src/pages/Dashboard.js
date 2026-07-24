@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import DOMPurify from 'dompurify';
 import { Users, TrendingUp, FileImage, ArrowUpRight, ArrowRight, Waypoints, Sparkles, GitCompareArrows, Loader2, X, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -99,7 +100,7 @@ const Dashboard = () => {
           const Icon = stat.icon;
           return (
             <div
-              key={idx}
+              key={stat.label}
               data-testid={`stat-card-${stat.label.toLowerCase()}`}
               className="card-modern rounded-lg p-5 group"
               style={{ animation: `fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.04}s backwards` }}
@@ -356,9 +357,12 @@ const CompareDialog = ({ open, onClose, data, loading, error }) => {
                   data-testid="compare-content"
                   className="text-sm text-[#d4d4d8] leading-relaxed space-y-3"
                   dangerouslySetInnerHTML={{
-                    __html: (data.comparison || '').replace(
-                      /\*\*(.*?)\*\*/g,
-                      '<span class="block font-mono text-white uppercase tracking-wide text-[11px] mt-4 mb-1">$1</span>'
+                    __html: DOMPurify.sanitize(
+                      (data.comparison || '').replace(
+                        /\*\*(.*?)\*\*/g,
+                        '<span class="block font-mono text-white uppercase tracking-wide text-[11px] mt-4 mb-1">$1</span>'
+                      ),
+                      { ALLOWED_TAGS: ['span', 'strong', 'em', 'br'], ALLOWED_ATTR: ['class'] }
                     )
                   }}
                 />

@@ -431,8 +431,11 @@ async def get_single_post_comments(request: Request, post_url: str, limit: int =
     """Fetch comments for a single Instagram post (by full URL)."""
     if not post_url or 'instagram.com' not in post_url:
         raise HTTPException(status_code=400, detail="Valid Instagram post_url required")
+    comments = []
     try:
         comments = await fetch_post_comments(post_url, limit)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Single post comments fetch failed for {post_url}: {e}")
         raise HTTPException(status_code=502, detail="Failed to fetch comments")

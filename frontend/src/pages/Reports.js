@@ -140,8 +140,8 @@ const Reports = () => {
                 { label: 'Following', value: profile.following?.toLocaleString() },
                 { label: 'Posts', value: profile.posts?.toLocaleString() },
                 { label: 'Data Points', value: history.length },
-              ].map((s, i) => (
-                <div key={i} className="card-modern rounded-md p-5">
+              ].map((s) => (
+                <div key={s.label} className="card-modern rounded-md p-5">
                   <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#737373]">{s.label}</div>
                   <div className="font-mono text-2xl font-bold text-[#fafafa] mt-2">{s.value}</div>
                 </div>

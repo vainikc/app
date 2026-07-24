@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import DOMPurify from 'dompurify';
 import { Plus, Trash2, Sparkles, ExternalLink, ShieldCheck, Lock, Briefcase, Heart, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -322,7 +323,10 @@ const ProfileTracker = () => {
                       <div
                         className="text-sm text-[#d4d4d8] leading-relaxed whitespace-pre-wrap"
                         dangerouslySetInnerHTML={{
-                          __html: (insight.insights || '').replace(/\*\*(.*?)\*\*/g, '<span class="font-mono text-[#ffffff] uppercase tracking-wide text-xs">$1</span>')
+                          __html: DOMPurify.sanitize(
+                            (insight.insights || '').replace(/\*\*(.*?)\*\*/g, '<span class="font-mono text-[#ffffff] uppercase tracking-wide text-xs">$1</span>'),
+                            { ALLOWED_TAGS: ['span', 'strong', 'em', 'br'], ALLOWED_ATTR: ['class'] }
+                          )
                         }}
                       />
                     </div>
