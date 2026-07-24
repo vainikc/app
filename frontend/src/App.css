@@ -1,13 +1,19 @@
 .App {
   min-height: 100vh;
-  background-color: #030712;
+  background-color: #0a0a0a;
 }
 
-.metric-card {
-  transition: transform 0.2s, border-color 0.2s;
+.card-detective {
+  background: linear-gradient(135deg, #141414 0%, #0f0f0f 100%);
+  border: 1px solid #1f1f1f;
+  transition: border-color 0.3s ease, transform 0.3s ease;
 }
 
-.metric-card:hover {
-  transform: translateY(-2px);
-  border-color: #2563EB;
+.card-detective:hover {
+  border-color: #d4a656;
+  transform: translateY(-1px);
+}
+
+.amber-glow {
+  box-shadow: 0 0 20px rgba(212, 166, 86, 0.15);
 }

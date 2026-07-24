@@ -1,0 +1,45 @@
+{
+  "summary": "Sherlock v2.0 end-to-end verification (backend + frontend). Confirmed REAL Apify Instagram data (no mocks). 17/17 pytest cases pass. Verified live values: @natgeo=268,965,455 followers (National Geographic, verified, business), @cristiano=677,873,612 followers, @therock=382M, @humansofny=12.6M. Emergent LLM (openai/gpt-5.4) insights endpoint returns real analysis with **Content Strategy**, **Audience**, **Engagement**, **Recommendation** sections. Frontend loads dark Sherlock theme with amber #d4a656 accents and ZERO blue-leaning pixels detected; navigation across Dashboard/Tracker/Activity/Ties&Trails/Reports/Search works; adding @natgeo via UI displays real 268M follower count; Search shows real profile; Reports renders growth + engagement charts with live data.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/profile/{username}", "issue": "Apify actor intermittently returns latestPosts=[] for some accounts (observed for @natgeo on one call, other calls returned 12 posts). This makes /activity return [] when it occurs. This is an Apify actor data quirk, not a backend defect. Backend correctly serializes whatever Apify sends."},
+      {"endpoint": "GET /api/profile/{username}", "issue": "field 'category' returns the literal string 'None' when Apify's businessCategoryName is null (server.py falls back to 'personal' only when key is missing, not when value is the string 'None')."},
+      {"endpoint": "GET /api/insights/{username}", "issue": "On LLM failure the endpoint returns HTTP 200 with an error message in 'insights' field; better to surface non-2xx so frontend can react."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Profile pictures / post thumbnails", "issue": "Instagram CDN images blocked by browser (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin due to Cross-Origin-Resource-Policy: same-origin header). onError fallback hides the tag, but avatar/thumbnail slots render empty. Consider proxying images through backend or using an <img> with 'crossorigin' left unset and a backend image proxy endpoint.", "affected_selectors": ["img[referrerPolicy='no-referrer']", ".card-detective img"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: Add /api/image-proxy?url=... in backend that fetches Instagram media and streams it back to bypass CDN CORP so profile_pic and post display_url render in the browser.",
+    "Optional: In fetch_instagram_profile, treat businessCategoryName in ('None', None, '') uniformly and default to 'personal'.",
+    "Optional: Consider surfacing Apify actor 'no latestPosts' as a soft-warning in the profile response so UI can show a hint instead of a silent empty activity feed."
+  ],
+  "critical_code_review_comments": [
+    "server.py uses an in-process dict cache; will not scale across multiple workers or restarts. Acceptable for MVP.",
+    "add_tracked_account uses query param 'username' (POST /api/accounts?username=...) instead of a JSON body. Works, but not RESTful.",
+    "get_ai_insights swallows LLM exceptions and returns 200; caller cannot distinguish error from real analysis.",
+    "profile_cache has no size cap; long-running server could grow unbounded.",
+    "No rate limiting / auth on any endpoint; anyone can trigger Apify calls (billed by owner).",
+    "get_relationships builds nodes from an in-memory cache lookup only; freshly-restarted server will always return category='unknown' with no links until profiles are re-fetched."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (17/17 pytest cases pass)", "frontend": "100% of tested flows (Dashboard, Tracker add, Search, Reports, Map, Activity, dark theme, real data)"},
+  "test_credentials": "N/A - app has no authentication",
+  "seed_data_creation": "Added and then removed @natgeo tracked account during tests (cleaned up).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Apify is billed; every uncached /profile call takes ~10-40s and costs money. Backend caches profiles 15 min in-process. Test file /app/backend/tests/backend_test.py uses cristiano for the activity test because natgeo's Apify response intermittently omits latestPosts. If retesting AI insights, allow up to 180s (gpt-5.4 via emergentintegrations). REAL follower counts to sanity-check: natgeo~268M, cristiano~677M, therock~382M, humansofny~12.6M.",
+  "rca of the issue": "N/A - no critical bugs. Only image loading is degraded due to Instagram CDN's Cross-Origin-Resource-Policy header, which is external and outside app control unless a backend image proxy is added."
+}
