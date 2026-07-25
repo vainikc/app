@@ -94,8 +94,8 @@ const ProfileTracker = () => {
 
   return (
     <div className="p-10 max-w-[1600px]">
-      <div className="mb-10">
-        <div className="inline-block text-[10px] font-mono uppercase tracking-[0.3em] text-[#ffffff] mb-3 inline-block pl-6">
+      <div className="mb-10 pl-8 hero-crosshair">
+        <div className="inline-block text-[10px] font-mono uppercase tracking-[0.3em] text-[#a3e635] mb-3 inline-block">
           Investigations
         </div>
         <h1 className="text-5xl sm:text-6xl font-bold font-semibold tracking-tight text-[#fafafa] mb-2">

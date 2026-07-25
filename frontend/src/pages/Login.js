@@ -30,11 +30,22 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#000] px-6">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-[#000] px-6 relative overflow-hidden">
+      {/* Ambient accent glow */}
+      <div
+        className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(163,230,53,0.09) 0%, transparent 65%)' }}
+      />
+      <div
+        className="absolute bottom-[-15%] left-[-10%] w-[500px] h-[500px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 65%)' }}
+      />
+
+      <div className="w-full max-w-md glass-strong rounded-2xl p-10 relative z-10">
         <div className="flex items-center gap-2.5 mb-10">
           <SherlockLogo size={28} />
           <span className="font-mono text-lg font-medium text-white tracking-tight">Sherlock</span>
+          <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#a3e635] shadow-[0_0_8px_rgba(163,230,53,0.7)]"></span>
         </div>
 
         <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">
@@ -112,7 +123,7 @@ const Login = () => {
             type="submit"
             disabled={loading}
             data-testid="auth-submit-btn"
-            className="w-full bg-white text-black rounded-md py-2.5 text-sm font-medium hover:bg-[#e5e5e5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-[#a3e635] text-black rounded-md py-2.5 text-sm font-semibold hover:bg-[#bef264] transition-all shadow-[0_0_28px_-8px_rgba(163,230,53,0.6)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {mode === 'login' ? 'Sign in' : 'Create account'}

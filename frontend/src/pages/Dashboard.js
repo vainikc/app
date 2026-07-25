@@ -77,7 +77,7 @@ const Dashboard = () => {
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-10 flex items-start justify-between gap-6">
-        <div>
+        <div className="pl-8 hero-crosshair">
           <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-white mb-3">
             Dashboard
           </h1>
@@ -102,11 +102,11 @@ const Dashboard = () => {
             <div
               key={stat.label}
               data-testid={`stat-card-${stat.label.toLowerCase()}`}
-              className="card-modern rounded-lg p-5 group"
+              className="card-neu rounded-lg p-5 group"
               style={{ animation: `fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) ${idx * 0.04}s backwards` }}
             >
               <div className="flex items-center justify-between mb-6">
-                <Icon className="w-4 h-4 text-[#737373]" strokeWidth={1.75} />
+                <Icon className="w-4 h-4 text-[#737373] group-hover:text-[#a3e635] transition-colors" strokeWidth={1.75} />
                 <ArrowUpRight className="w-3.5 h-3.5 text-[#404040] group-hover:text-white transition-colors" strokeWidth={1.75} />
               </div>
               <div className="text-3xl font-bold text-white tracking-tight mb-1">
@@ -121,13 +121,13 @@ const Dashboard = () => {
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">Active investigations</h2>
+        <h2 className="text-xl font-semibold text-white accent-bar">Active investigations</h2>
         <div className="flex items-center gap-3">
           {data.accounts.length >= 2 && (
             <button
               onClick={openCompare}
               data-testid="compare-accounts-btn"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-[#1f1f1f] text-[#a1a1aa] hover:text-white hover:border-[#333] transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-[#1f1f1f] text-[#a1a1aa] hover:text-[#a3e635] hover:border-[#a3e635]/40 hover:shadow-[0_0_20px_-6px_rgba(163,230,53,0.35)] transition-all"
             >
               <GitCompareArrows className="w-3.5 h-3.5" strokeWidth={1.75} />
               Compare with AI
@@ -246,9 +246,9 @@ const AiSnapshotSection = ({ accounts, summaries, loading, onGenerate }) => {
     <div className="mt-10">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-white" strokeWidth={1.75} />
-          <h2 className="text-xl font-semibold text-white">AI snapshot</h2>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-[#525252] bg-[#0f0f0f] border border-[#1f1f1f] px-2 py-0.5 rounded">
+          <Sparkles className="w-4 h-4 text-[#a3e635]" strokeWidth={1.75} />
+          <h2 className="text-xl font-semibold text-white accent-bar">AI snapshot</h2>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-[#a3e635] bg-[#a3e6351a] border border-[#a3e63533] px-2 py-0.5 rounded">
             GPT-5.4
           </span>
         </div>
@@ -283,7 +283,7 @@ const AiSnapshotSection = ({ accounts, summaries, loading, onGenerate }) => {
             <div
               key={s.username}
               data-testid={`ai-summary-${s.username}`}
-              className="card-modern rounded-lg p-5 border-l-2 border-l-white/30"
+              className="card-neu rounded-lg p-5 border-l-2 border-l-[#a3e635]/40"
             >
               <div className="flex items-center gap-2 mb-3">
                 <span className="font-mono text-sm font-medium text-white">@{s.username}</span>
@@ -309,7 +309,7 @@ const AiSnapshotSection = ({ accounts, summaries, loading, onGenerate }) => {
 const CompareDialog = ({ open, onClose, data, loading, error }) => {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-3xl w-[95vw] bg-[#0a0a0a] border border-[#1f1f1f] p-0 overflow-hidden">
+      <DialogContent className="max-w-3xl w-[95vw] glass-strong border border-[#1f1f1f] p-0 overflow-hidden">
         <DialogTitle className="sr-only">AI account comparison</DialogTitle>
         <DialogDescription className="sr-only">
           Head-to-head comparison of tracked Instagram accounts

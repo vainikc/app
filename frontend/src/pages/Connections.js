@@ -86,7 +86,7 @@ const Connections = () => {
 
   return (
     <div className="p-10 max-w-[1600px]">
-      <div className="mb-8">
+      <div className="mb-8 pl-8 hero-crosshair">
         <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-white mb-3">
           Connections
         </h1>
@@ -323,7 +323,7 @@ const FollowingView = ({ data, period }) => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-white" />
+                <Sparkles className="w-4 h-4 text-[#a3e635]" strokeWidth={1.75} />
                 {smartRecent.length} account{smartRecent.length === 1 ? '' : 's'} followed in the {period}
               </h3>
               <p className="text-xs text-[#737373] mt-0.5">
@@ -333,7 +333,7 @@ const FollowingView = ({ data, period }) => {
                 {mode === "heuristic" && "Best-effort — Instagram's newest-first ordering"}
               </p>
             </div>
-            <span className="text-[10px] text-white bg-white/10 px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+            <span className="text-[10px] text-[#a3e635] bg-[#a3e6351a] border border-[#a3e63533] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
               {mode}
             </span>
           </div>
@@ -412,7 +412,7 @@ const FollowersView = ({ data, period }) => {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-4 h-4 text-[#a3e635]" strokeWidth={1.75} />
                 {smartRecent.length} new follower{smartRecent.length === 1 ? '' : 's'} in the {period}
               </h3>
               <p className="text-xs text-[#737373] mt-0.5">
@@ -422,7 +422,7 @@ const FollowersView = ({ data, period }) => {
                 {mode === "heuristic" && "Best-effort — Instagram's newest-first ordering"}
               </p>
             </div>
-            <span className="text-[10px] text-white bg-white/10 px-2 py-0.5 rounded font-mono uppercase tracking-wider">
+            <span className="text-[10px] text-[#a3e635] bg-[#a3e6351a] border border-[#a3e63533] px-2 py-0.5 rounded font-mono uppercase tracking-wider">
               {mode}
             </span>
           </div>
@@ -508,7 +508,7 @@ const UserRow = ({ user, index, highlight }) => (
       {user.full_name && <div className="text-xs text-[#737373] truncate">{user.full_name}</div>}
     </div>
     {highlight === 'new' && (
-      <span className="text-[10px] font-mono text-[#22c55e] uppercase tracking-wide">new</span>
+      <span className="text-[10px] font-mono text-[#a3e635] uppercase tracking-wide">new</span>
     )}
   </a>
 );

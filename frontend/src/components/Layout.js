@@ -20,7 +20,9 @@ const Layout = () => {
 
   return (
     <div className="flex h-screen bg-black">
-      <aside className="w-60 bg-[#050505] border-r border-[#141414] flex flex-col">
+      <aside className="w-60 glass-strong border-r border-[#141414] flex flex-col relative">
+        {/* accent top strip */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#a3e635]/40 to-transparent"></div>
         <div className="p-6 border-b border-[#141414]">
           <div className="flex items-center gap-3">
             <SherlockLogo size={28} color="#ffffff" />
@@ -42,12 +44,15 @@ const Layout = () => {
                 key={item.path}
                 to={item.path}
                 data-testid={`nav-${item.label.toLowerCase().replace(/ & /g, '-').replace(/ /g, '-')}`}
-                className={`group flex items-center gap-3 px-3 py-2 rounded-md transition-colors duration-150 ${
+                className={`group relative flex items-center gap-3 px-3 py-2 rounded-md transition-colors duration-150 ${
                   isActive
                     ? 'bg-[#141414] text-white'
                     : 'text-[#737373] hover:bg-[#0a0a0a] hover:text-[#e5e5e5]'
                 }`}
               >
+                {isActive && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[2px] bg-[#a3e635] rounded-r shadow-[0_0_8px_rgba(163,230,53,0.5)]"></span>
+                )}
                 <Icon className="w-4 h-4" strokeWidth={1.75} />
                 <span className="font-medium text-[13px]">{item.label}</span>
               </Link>

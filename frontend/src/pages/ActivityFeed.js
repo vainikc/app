@@ -75,7 +75,7 @@ const ActivityFeed = () => {
 
   return (
     <div className="p-10 max-w-[1600px]">
-      <div className="mb-8">
+      <div className="mb-8 pl-8 hero-crosshair">
         <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-white mb-3">
           Activity
         </h1>
@@ -299,7 +299,7 @@ const PostDialog = ({ open, onClose, post, username, profile }) => {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-5xl w-[95vw] bg-[#0a0a0a] border border-[#1f1f1f] p-0 overflow-hidden">
+      <DialogContent className="max-w-5xl w-[95vw] glass-strong border border-[#1f1f1f] p-0 overflow-hidden">
         <DialogTitle className="sr-only">Post by @{username}</DialogTitle>
         <DialogDescription className="sr-only">
           Instagram post with {post.likes} likes and {post.comments} comments
