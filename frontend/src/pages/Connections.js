@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, Clock, Sparkles, AlertTriangle, Handshake, Trash2 } from 'lucide-react';
+import { UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, Clock, Sparkles, AlertTriangle, Handshake, Trash2, Waypoints } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -122,6 +122,34 @@ const Connections = ({
           <p className="text-[15px] text-[#a1a1aa] max-w-2xl leading-relaxed">
             Who joined or left in a chosen time window. Only accounts within the range are shown.
           </p>
+        </div>
+      )}
+      {embedded && (
+        <div className="card-modern relative overflow-hidden rounded-xl p-6 mb-6">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#a3e635]/70 to-transparent" />
+          <div className="flex items-start gap-4">
+            <div className="w-11 h-11 rounded-lg bg-[#a3e635]/10 border border-[#a3e635]/25 flex items-center justify-center shrink-0">
+              <Waypoints className="w-5 h-5 text-[#a3e635]" strokeWidth={1.75} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap mb-1.5">
+                <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#a3e635]">
+                  Investigation workspace
+                </div>
+                {selected && (
+                  <span className="px-2 py-0.5 rounded-full bg-[#a3e635]/10 border border-[#a3e635]/20 text-[10px] font-mono text-[#a3e635]">
+                    @{selected}
+                  </span>
+                )}
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-2">
+                Connection investigation
+              </h1>
+              <p className="text-sm text-[#a1a1aa] max-w-2xl leading-relaxed">
+                Examine who followed, unfollowed, or shares a mutual connection within a selected time range.
+              </p>
+            </div>
+          </div>
         </div>
       )}
       {accounts.length === 0 ? (
