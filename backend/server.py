@@ -388,6 +388,54 @@ async def get_following_list(request: Request, username: str, limit: int = Query
     return await _snapshot_connections(username, "following", limit, since_days)
 
 
+@api_router.get("/profile/{username}/mutuals")
+@limiter.limit("10/minute")
+async def get_mutuals(request: Request, username: str, limit: int = Query(200, ge=1, le=1000)):
+    """
+    Mutual connections: intersection of who follows @username and who @username follows back.
+    Both lists are fetched concurrently and cached via the existing connection-list cache.
+    """
+    username = username.strip().lstrip('@').lower()
+
+    # Fetch both lists in parallel — huge win on latency.
+    followers_task = fetch_connection_list(username, "followers", limit)
+    following_task = fetch_connection_list(username, "following", limit)
+    followers, following = await asyncio.gather(followers_task, following_task)
+
+    if not followers and not following:
+        return {
+            "username": username,
+            "mutuals": [],
+            "mutual_count": 0,
+            "followers_sampled": 0,
+            "following_sampled": 0,
+            "quota_exhausted": True,
+        }
+
+    # Union-by-username; keep the richest detail we've seen for each user.
+    follower_map = {u['username']: u for u in followers if u.get('username')}
+    following_map = {u['username']: u for u in following if u.get('username')}
+    mutual_usernames = follower_map.keys() & following_map.keys()
+
+    mutuals = []
+    for u in mutual_usernames:
+        details = follower_map.get(u) or following_map.get(u)
+        if details:
+            mutuals.append(details)
+
+    # Sort alphabetically for stable display.
+    mutuals.sort(key=lambda x: (x.get('username') or '').lower())
+
+    return {
+        "username": username,
+        "mutuals": mutuals,
+        "mutual_count": len(mutuals),
+        "followers_sampled": len(followers),
+        "following_sampled": len(following),
+        "quota_exhausted": False,
+    }
+
+
 @api_router.get("/profile/{username}/connection-history")
 async def get_connection_history(username: str, connection_type: str = "followers"):
     """Return historical snapshots showing connection count over time."""

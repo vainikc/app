@@ -151,7 +151,12 @@ async def fetch_connection_list(username: str, connection_type: str = "followers
     if connection_type not in ('followers', 'following'):
         raise ValueError("connection_type must be 'followers' or 'following'")
 
-    cache_key = f"{connection_type}_{username}_{limit}"
+    # Actor requires: dataToScrape in {"Followers", "Followings"}, resultsLimit >= 50
+    data_to_scrape = "Followers" if connection_type == "followers" else "Followings"
+    results_limit = max(50, limit)
+
+    # Cache key versioned to invalidate old broken cache from previous parameter set
+    cache_key = f"v2_{connection_type}_{username}_{results_limit}"
     cached = _cache_get(cache_key, ttl=CACHE_TTL_LONG)
     if cached:
         return cached
@@ -161,8 +166,8 @@ async def fetch_connection_list(username: str, connection_type: str = "followers
             "scraping_solutions~instagram-scraper-followers-following-no-cookies",
             {
                 "Account": [username],
-                "selectType": connection_type,
-                "maxResults": limit
+                "dataToScrape": data_to_scrape,
+                "resultsLimit": results_limit
             },
             timeout=180.0
         )

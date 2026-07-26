@@ -1,0 +1,37 @@
+{
+  "summary": "Backend testing for iteration 9 (Connections bug fix + Mutuals feature) — 16/16 tests PASSED. Verified: (1) BUG FIX #1 - GET /api/profile/ashvi.thakkarr/followers-list and /following-list now return DIFFERENT lists (sets differ, first-5 differ, full-set-symmetric-difference > 0); (2) BUG FIX #2 - The latest 'following' snapshot in db.connection_snapshots overlaps heavily (>50%) with the current live following list and NOT with the followers list, confirming corrupted snapshots are gone; (3) FEATURE - GET /api/profile/{username}/mutuals returns correct shape {username, mutuals, mutual_count, followers_sampled, following_sampled, quota_exhausted}, mutual_count matches len(mutuals), and set equality holds: set(mutuals) == set(followers) ∩ set(following) for @ashvi.thakkarr (123 mutuals from 200/200 samples — matches main agent's browser smoke result); (4) REGRESSION - login/cookies/logout/protected-401/me all working. No blocked or unverified capabilities.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "N/A", "issue": "PytestRemovedIn10Warning: class-scoped fixtures defined as instance methods (in test_connections_bugfix.py). Cosmetic — tests pass and behavior is correct. Recommend @classmethod for future maintainability."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_connections_bugfix.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iter9_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 983 lines — approaching the 700-line threshold recommended for splitting. Consider splitting connections routes, insights (LLM) routes, and auth wiring into separate modules.",
+    "In apify_client.fetch_connection_list (line 174-177), HTTPException is caught and swallowed to return [] on Apify failure — while this enables 'quota_exhausted' UX, it also silently hides real 5xx errors from the client. Consider logging + surfacing a non-fatal warning field in the mutuals response too (currently only relies on the empty-list branch).",
+    "The mutuals endpoint fetches followers and following via asyncio.gather (good), but if ONE of them errors while the other succeeds, both are effectively discarded (mutual_count becomes small silently). Consider distinguishing partial-fetch vs full-quota-exhausted in the response.",
+    "The old /app/backend/tests/backend_test.py (551 lines, pre-auth) will now fail wholesale under the JWT protection because it never logs in. It was updated by conftest.http fixture so it auto-logs in — good — but it references '_seed' cleanup in classes that may leak seed data if tests are interrupted."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py (created — shared auth_session fixture)",
+    "/app/backend/tests/test_connections_bugfix.py (created — 16 tests for iteration 9 scope)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@sherlock.app / Sherlock2026! (from /app/memory/test_credentials.md — works)",
+  "seed_data_creation": "None — bug/feature tests read live Apify data only; older backend_test.py seed markers (_seed: TEST_SEED_ITER8) were NOT triggered in this run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Auth uses JWT via httpOnly cookies — use /api/auth/login first and share requests.Session (see conftest.py auth_session fixture). All /api/* except image-proxy and auth routes require access_token cookie. Apify calls on /followers-list, /following-list, /mutuals for @ashvi.thakkarr are cached ~6h so tests are fast if run within that window (they took only 13s here). @ashvi.thakkarr followers count ~1k+, following ~200 range, ~123 mutuals from 200/200 samples. If Apify quota exhausts, endpoints return quota_exhausted=true and tests skip semantic checks.",
+  "rca of the issue": "N/A — this iteration was a verification run for a previously fixed bug. Original RCA (per review_request): apify_client.fetch_connection_list was passing param name `selectType` which the scraping_solutions~instagram-scraper-followers-following-no-cookies actor silently ignored, so it always returned the same default (followers) regardless of the requested list type. Fix confirmed in place: uses `dataToScrape` in {Followers, Followings} with resultsLimit >= 50, and cache_key versioned to `v2_...` to invalidate old broken cache. Verified via live Apify calls that lists are now distinct and semantics are correct."
+}

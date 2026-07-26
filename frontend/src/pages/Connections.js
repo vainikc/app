@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, Clock, Sparkles, AlertTriangle } from 'lucide-react';
+import { UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, Clock, Sparkles, AlertTriangle, Handshake } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -37,6 +37,7 @@ const Connections = () => {
   const [timeRange, setTimeRange] = useState('7');
   const [followersData, setFollowersData] = useState(null);
   const [followingData, setFollowingData] = useState(null);
+  const [mutualsData, setMutualsData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ const Connections = () => {
   useEffect(() => {
     setFollowersData(null);
     setFollowingData(null);
+    setMutualsData(null);
   }, [selected, timeRange]);
 
   const fetchAccounts = async () => {
@@ -68,6 +70,10 @@ const Connections = () => {
         const res = await axios.get(`${API}/profile/${selected}/following-list?limit=100&since_days=${timeRange}`);
         setFollowingData(res.data);
         if (res.data.quota_exhausted) toast.error('Apify quota exhausted');
+      } else if (tab === 'mutuals') {
+        const res = await axios.get(`${API}/profile/${selected}/mutuals?limit=200`);
+        setMutualsData(res.data);
+        if (res.data.quota_exhausted) toast.error('Apify quota exhausted');
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to fetch');
@@ -76,11 +82,12 @@ const Connections = () => {
   };
 
   const tabs = [
-    { id: 'following', label: 'Recently followed', icon: UserCheck },
-    { id: 'followers', label: 'New followers', icon: Users },
+    { id: 'following', label: 'Recently followed', icon: UserCheck, hint: 'Who @user recently followed' },
+    { id: 'followers', label: 'New followers', icon: Users, hint: 'Who recently followed @user' },
+    { id: 'mutuals', label: 'Mutuals', icon: Handshake, hint: 'Both directions' },
   ];
 
-  const currentData = tab === 'followers' ? followersData : followingData;
+  const currentData = tab === 'followers' ? followersData : tab === 'following' ? followingData : mutualsData;
   const showTimeRange = tab === 'followers' || tab === 'following';
   const periodLabel = TIME_RANGES.find(r => r.value === timeRange)?.label.toLowerCase() || 'past week';
 
@@ -139,7 +146,9 @@ const Connections = () => {
             </div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-[#525252] flex-1 min-w-[300px]">
-                Instagram returns following list newest-first · Fetch takes 30–90s
+                {tab === 'following' && 'Instagram returns following list newest-first · Fetch takes 30–90s'}
+                {tab === 'followers' && 'Detect new/lost followers in the chosen window · Fetch takes 30–90s'}
+                {tab === 'mutuals' && 'Intersection of followers ∩ following · Fetches both lists in parallel'}
               </p>
               <Button
                 data-testid="fetch-connections-btn"
@@ -201,8 +210,10 @@ const Connections = () => {
             </div>
           ) : tab === 'following' ? (
             <FollowingView data={currentData} period={periodLabel} />
-          ) : (
+          ) : tab === 'followers' ? (
             <FollowersView data={currentData} period={periodLabel} />
+          ) : (
+            <MutualsView data={currentData} username={selected} />
           )}
         </>
       )}
@@ -520,7 +531,9 @@ const UserCard = ({ user, highlight }) => (
     target="_blank"
     rel="noopener noreferrer"
     className={`flex items-center gap-3 p-2.5 border rounded-md hover:border-[#333] transition-colors ${
-      highlight === 'new' ? 'bg-[#0a0a0a] border-white/15' : 'bg-transparent border-[#1a1a1a]'
+      highlight === 'new' ? 'bg-[#0a0a0a] border-white/15' :
+      highlight === 'mutual' ? 'bg-[#a3e6350a] border-[#a3e63524]' :
+      'bg-transparent border-[#1a1a1a]'
     }`}
   >
     {user.profile_pic ? (
@@ -556,5 +569,58 @@ const QuotaExhausted = ({ type }) => (
   </div>
 );
 
+
+const MutualsView = ({ data, username }) => {
+  if (data.quota_exhausted) {
+    return (
+      <div className="card-modern rounded-lg p-16 text-center">
+        <div className="text-lg text-white mb-2">Couldn't fetch mutuals</div>
+        <p className="text-sm text-[#a1a1aa]">Apify quota exhausted or the scraper failed. Try again shortly.</p>
+      </div>
+    );
+  }
+
+  const mutuals = data.mutuals || [];
+
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+        <StatCard label="Mutuals" value={data.mutual_count?.toLocaleString?.() ?? mutuals.length} tone="pos" />
+        <StatCard label="Followers sampled" value={(data.followers_sampled ?? 0).toLocaleString()} />
+        <StatCard label="Following sampled" value={(data.following_sampled ?? 0).toLocaleString()} />
+      </div>
+
+      <div className="card-modern rounded-lg p-3.5 mb-4 border-l-2 border-l-[#a3e635]/60">
+        <div className="flex items-start gap-3">
+          <Info className="w-3.5 h-3.5 text-[#a3e635] mt-0.5 shrink-0" />
+          <div className="text-xs text-[#d4d4d8]">
+            Mutuals are accounts that both follow @{username} <em>and</em> are followed back by @{username}.
+            We sample up to {data.followers_sampled} from each side to find overlaps —
+            for accounts with &gt;200 followers the true mutual count may be higher than what's shown.
+          </div>
+        </div>
+      </div>
+
+      {mutuals.length === 0 ? (
+        <div className="card-modern rounded-lg p-12 text-center">
+          <div className="text-lg text-white mb-2">No mutuals in the sample</div>
+          <p className="text-sm text-[#a1a1aa]">No overlap detected between followers and following.</p>
+        </div>
+      ) : (
+        <div className="card-modern rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <Handshake className="w-4 h-4 text-[#a3e635]" strokeWidth={1.75} />
+            {mutuals.length} mutual{mutuals.length === 1 ? '' : 's'}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {mutuals.map((u) => (
+              <UserCard key={u.username} user={u} highlight="mutual" />
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
 
 export default Connections;
