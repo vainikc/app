@@ -52,7 +52,12 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    try { await axios.post(`${API}/auth/logout`); } catch (e) { /* ignore */ }
+    try {
+      await axios.post(`${API}/auth/logout`);
+    } catch (err) {
+      // Non-fatal: still drop the client session even if the server call fails
+      console.warn('Server-side logout failed; clearing local session anyway:', err.message);
+    }
     setUser(false);
   };
 
