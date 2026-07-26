@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -13,16 +13,22 @@ const ProfileTracker = () => {
   const [trackedAccounts, setTrackedAccounts] = useState([]);
   const [username, setUsername] = useState('');
   const [adding, setAdding] = useState(false);
+  const [selected, setSelected] = useState('');
 
   useEffect(() => {
     fetchTrackedAccounts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchTrackedAccounts = async () => {
+  const fetchTrackedAccounts = async (preferred = '') => {
     try {
       const res = await axios.get(`${API}/accounts`);
       setTrackedAccounts(res.data);
+      setSelected((current) => {
+        if (preferred && res.data.some((a) => a.username === preferred)) return preferred;
+        if (res.data.some((a) => a.username === current)) return current;
+        return res.data[0]?.username || '';
+      });
     } catch (error) {
       console.error('Error:', error);
     }
@@ -36,7 +42,7 @@ const ProfileTracker = () => {
       const res = await axios.post(`${API}/accounts?username=${cleaned}`);
       toast.success(`Now tracking @${res.data.profile.username}`);
       setUsername('');
-      fetchTrackedAccounts();
+      await fetchTrackedAccounts(res.data.profile.username);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Error adding account');
     }
@@ -47,7 +53,7 @@ const ProfileTracker = () => {
     try {
       await axios.delete(`${API}/accounts/${u}`);
       toast.success(`Removed @${u}`);
-      fetchTrackedAccounts();
+      await fetchTrackedAccounts();
     } catch {
       toast.error('Error removing account');
     }
@@ -91,37 +97,17 @@ const ProfileTracker = () => {
         </div>
         <p className="text-xs text-[#525252] mt-2">Live data via Apify. Fetch may take 10–30 seconds on first request.</p>
 
-        {trackedAccounts.length > 0 && (
-          <div className="mt-5 pt-5 border-t border-[#141414]">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[#525252] mb-2">
-              Active cases ({trackedAccounts.length})
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {trackedAccounts.map((a) => (
-                <div
-                  key={a.id}
-                  data-testid={`case-chip-${a.username}`}
-                  className="group flex items-center gap-2 bg-[#0f0f0f] border border-[#1f1f1f] rounded-full pl-3 pr-1 py-1"
-                >
-                  <span className="font-mono text-xs text-white">@{a.username}</span>
-                  <button
-                    onClick={() => handleRemove(a.username)}
-                    data-testid={`remove-case-${a.username}`}
-                    title={`Stop tracking @${a.username}`}
-                    className="w-5 h-5 rounded-full text-[#525252] hover:text-[#dc2626] hover:bg-[#1a0a0a] flex items-center justify-center transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {trackedAccounts.length > 0 && (
         <div className="mt-6">
-          <Connections embedded />
+          <Connections
+            embedded
+            accounts={trackedAccounts}
+            selectedAccount={selected}
+            onSelectedAccountChange={setSelected}
+            onRemoveAccount={handleRemove}
+          />
         </div>
       )}
     </div>

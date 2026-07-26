@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, Clock, Sparkles, AlertTriangle, Handshake } from 'lucide-react';
+import { UserMinus, Users, UserCheck, ShieldCheck, Lock, RefreshCw, Info, Clock, Sparkles, AlertTriangle, Handshake, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -30,7 +30,13 @@ const TIME_RANGES = [
   { value: '0', label: 'Since last check' },
 ];
 
-const Connections = ({ embedded = false }) => {
+const Connections = ({
+  embedded = false,
+  accounts: providedAccounts,
+  selectedAccount,
+  onSelectedAccountChange,
+  onRemoveAccount,
+}) => {
   const [accounts, setAccounts] = useState([]);
   const [selected, setSelected] = useState('');
   const [tab, setTab] = useState('following');
@@ -41,9 +47,17 @@ const Connections = ({ embedded = false }) => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchAccounts();
+    if (providedAccounts) {
+      setAccounts(providedAccounts);
+    } else {
+      fetchAccounts();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [providedAccounts]);
+
+  useEffect(() => {
+    if (selectedAccount !== undefined) setSelected(selectedAccount);
+  }, [selectedAccount]);
 
   useEffect(() => {
     setFollowersData(null);
@@ -83,6 +97,11 @@ const Connections = ({ embedded = false }) => {
     setLoading(false);
   };
 
+  const handleSelectedChange = (value) => {
+    setSelected(value);
+    onSelectedAccountChange?.(value);
+  };
+
   const tabs = [
     { id: 'following', label: 'Recently followed', icon: UserCheck, hint: 'Who @user recently followed' },
     { id: 'followers', label: 'New followers', icon: Users, hint: 'Who recently followed @user' },
@@ -105,20 +124,6 @@ const Connections = ({ embedded = false }) => {
           </p>
         </div>
       )}
-      {embedded && (
-        <div className="mb-6 pl-8 hero-crosshair">
-          <div className="inline-block text-[10px] font-mono uppercase tracking-[0.3em] text-[#a3e635] mb-2">
-            Connections Explorer
-          </div>
-          <h2 className="text-3xl font-bold tracking-tight text-white">
-            Followers · Following · Mutuals
-          </h2>
-          <p className="text-sm text-[#a1a1aa] mt-2 max-w-2xl">
-            Pick a case above (auto-selected) and a time window to inspect exactly who came in, left, or matched.
-          </p>
-        </div>
-      )}
-
       {accounts.length === 0 ? (
         <div className="card-modern rounded-lg p-16 text-center">
           <div className="text-xl font-medium text-white mb-2">No cases to inspect</div>
@@ -130,7 +135,7 @@ const Connections = ({ embedded = false }) => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="md:col-span-2">
                 <div className="text-xs text-[#737373] mb-2">Case</div>
-                <Select value={selected} onValueChange={setSelected}>
+                <Select value={selected} onValueChange={handleSelectedChange}>
                   <SelectTrigger data-testid="connections-account-select" className="bg-[#0a0a0a] border-[#1f1f1f] text-white font-mono h-10">
                     <SelectValue />
                   </SelectTrigger>
@@ -142,6 +147,16 @@ const Connections = ({ embedded = false }) => {
                     ))}
                   </SelectContent>
                 </Select>
+                {embedded && onRemoveAccount && selected && (
+                  <button
+                    onClick={() => onRemoveAccount(selected)}
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs text-[#737373] hover:text-[#dc2626] transition-colors"
+                    title={`Stop tracking @${selected}`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Remove case
+                  </button>
+                )}
               </div>
               {showTimeRange && (
                 <div>
@@ -199,18 +214,6 @@ const Connections = ({ embedded = false }) => {
                 </button>
               );
             })}
-          </div>
-
-          <div className="card-modern rounded-lg p-3.5 mb-6 border-l-2 border-l-[#dc2626]/50">
-            <div className="flex items-start gap-3">
-              <Info className="w-3.5 h-3.5 text-[#dc2626]/80 mt-0.5 shrink-0" />
-              <div className="text-xs text-[#a1a1aa]">
-                Instagram doesn't publicly expose two things — no scraper on Earth can retrieve them:
-                (1) posts a user has <em>liked</em> (removed by Meta in Oct 2019),
-                (2) comments they've made on <em>other</em> people's posts (no reverse index).
-                Everything below is real and public.
-              </div>
-            </div>
           </div>
 
           {loading ? (
