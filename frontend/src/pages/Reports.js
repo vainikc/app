@@ -18,12 +18,14 @@ const Reports = () => {
 
   useEffect(() => {
     fetchAccounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (selectedAccount) {
       fetchData(selectedAccount);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount]);
 
   const fetchAccounts = async () => {

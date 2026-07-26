@@ -1,27 +1,21 @@
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Activity, Network, BarChart3, Search, Waypoints, LogOut } from 'lucide-react';
+import { Outlet, Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Users, Activity, Zap, BarChart3 } from 'lucide-react';
 import SherlockLogo from '@/components/SherlockLogo';
-import { useAuth } from '@/lib/AuthContext';
 
 const Layout = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/tracker', icon: Users, label: 'Tracker' },
+    { path: '/tracker', icon: Users, label: 'Investigate' },
     { path: '/activity', icon: Activity, label: 'Activity' },
-    { path: '/connections', icon: Waypoints, label: 'Connections' },
-    { path: '/map', icon: Network, label: 'Ties & Trails' },
+    { path: '/map', icon: Zap, label: 'Deep Dive' },
     { path: '/reports', icon: BarChart3, label: 'Reports' },
-    { path: '/search', icon: Search, label: 'Search' },
   ];
 
   return (
     <div className="flex h-screen bg-black">
       <aside className="w-60 glass-strong border-r border-[#141414] flex flex-col relative">
-        {/* accent top strip */}
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#a3e635]/40 to-transparent"></div>
         <div className="p-6 border-b border-[#141414]">
           <div className="flex items-center gap-3">
@@ -29,7 +23,7 @@ const Layout = () => {
             <div>
               <h1 className="text-lg font-bold tracking-tight text-white leading-none">Sherlock</h1>
               <p className="text-[10px] uppercase tracking-[0.15em] text-[#525252] font-mono mt-1">
-                v3.3
+                v3.4
               </p>
             </div>
           </div>
@@ -60,25 +54,7 @@ const Layout = () => {
           })}
         </nav>
 
-        <div className="p-4 border-t border-[#141414] space-y-3">
-          {user && (
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-mono text-white truncate" data-testid="current-user-email">
-                  {user.email}
-                </div>
-                <div className="text-[10px] uppercase tracking-wider text-[#525252]">{user.role || 'user'}</div>
-              </div>
-              <button
-                onClick={async () => { await logout(); navigate('/login'); }}
-                data-testid="logout-btn"
-                title="Sign out"
-                className="text-[#737373] hover:text-white p-1.5 rounded-md hover:bg-[#0f0f0f] transition-colors"
-              >
-                <LogOut className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </button>
-            </div>
-          )}
+        <div className="p-4 border-t border-[#141414]">
           <div className="flex items-center gap-2 text-xs text-[#525252]">
             <div className="dot-live"></div>
             <span>Live data</span>

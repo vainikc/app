@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import DOMPurify from 'dompurify';
-import { Users, TrendingUp, FileImage, ArrowUpRight, ArrowRight, Waypoints, Sparkles, GitCompareArrows, Loader2, X, RefreshCw } from 'lucide-react';
+import { Users, TrendingUp, FileImage, ArrowUpRight, ArrowRight, Waypoints } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { proxyImage } from '@/lib/imageProxy';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -19,15 +17,10 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [data, setData] = useState({ accounts: [], totals: {} });
   const [loading, setLoading] = useState(true);
-  const [summaries, setSummaries] = useState(null); // null | [{username, summary, ...}]
-  const [summariesLoading, setSummariesLoading] = useState(false);
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [compareData, setCompareData] = useState(null);
-  const [compareLoading, setCompareLoading] = useState(false);
-  const [compareError, setCompareError] = useState(null);
 
   useEffect(() => {
     fetchDashboard();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDashboard = async () => {
@@ -40,35 +33,9 @@ const Dashboard = () => {
     setLoading(false);
   };
 
-  const fetchSummaries = async () => {
-    setSummariesLoading(true);
-    try {
-      const res = await axios.get(`${API}/insights/dashboard/summaries`);
-      setSummaries(res.data.summaries || []);
-    } catch (e) {
-      console.error('Summaries error:', e);
-      setSummaries([]);
-    }
-    setSummariesLoading(false);
-  };
-
-  const openCompare = async () => {
-    setCompareOpen(true);
-    if (compareData) return;
-    setCompareLoading(true);
-    setCompareError(null);
-    try {
-      const res = await axios.get(`${API}/insights/compare`);
-      setCompareData(res.data);
-    } catch (e) {
-      setCompareError(e.response?.data?.detail || 'Comparison failed');
-    }
-    setCompareLoading(false);
-  };
-
   const totals = data.totals || {};
   const stats = [
-    { label: 'Tracked', value: totals.tracked || 0, icon: Users },
+    { label: 'Cases', value: totals.tracked || 0, icon: Users },
     { label: 'Followers', value: formatNumber(totals.followers || 0), icon: TrendingUp },
     { label: 'Following', value: formatNumber(totals.following || 0), icon: Waypoints },
     { label: 'Posts', value: formatNumber(totals.posts || 0), icon: FileImage },
@@ -95,7 +62,7 @@ const Dashboard = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10">
         {stats.map((stat, idx) => {
           const Icon = stat.icon;
           return (
@@ -112,29 +79,15 @@ const Dashboard = () => {
               <div className="text-3xl font-bold text-white tracking-tight mb-1">
                 {stat.value}
               </div>
-              <div className="text-xs text-[#737373]">
-                {stat.label}
-              </div>
+              <div className="text-xs text-[#737373]">{stat.label}</div>
             </div>
           );
         })}
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white accent-bar">Active investigations</h2>
-        <div className="flex items-center gap-3">
-          {data.accounts.length >= 2 && (
-            <button
-              onClick={openCompare}
-              data-testid="compare-accounts-btn"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-[#1f1f1f] text-[#a1a1aa] hover:text-[#a3e635] hover:border-[#a3e635]/40 hover:shadow-[0_0_20px_-6px_rgba(163,230,53,0.35)] transition-all"
-            >
-              <GitCompareArrows className="w-3.5 h-3.5" strokeWidth={1.75} />
-              Compare with AI
-            </button>
-          )}
-          <span className="text-xs text-[#737373]">{data.accounts.length} {data.accounts.length === 1 ? 'case' : 'cases'}</span>
-        </div>
+        <h2 className="text-xl font-semibold text-white accent-bar">Active cases</h2>
+        <span className="text-xs text-[#737373]">{data.accounts.length} {data.accounts.length === 1 ? 'case' : 'cases'}</span>
       </div>
 
       {loading ? (
@@ -218,160 +171,7 @@ const Dashboard = () => {
           })}
         </div>
       )}
-
-      {/* AI Snapshot section — per-account one-liner summaries */}
-      {data.accounts.length > 0 && !loading && (
-        <AiSnapshotSection
-          accounts={data.accounts}
-          summaries={summaries}
-          loading={summariesLoading}
-          onGenerate={fetchSummaries}
-        />
-      )}
-
-      <CompareDialog
-        open={compareOpen}
-        onClose={() => setCompareOpen(false)}
-        data={compareData}
-        loading={compareLoading}
-        error={compareError}
-      />
     </div>
-  );
-};
-
-
-const AiSnapshotSection = ({ accounts, summaries, loading, onGenerate }) => {
-  return (
-    <div className="mt-10">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#a3e635]" strokeWidth={1.75} />
-          <h2 className="text-xl font-semibold text-white accent-bar">AI snapshot</h2>
-          <span className="text-[10px] font-mono uppercase tracking-wider text-[#a3e635] bg-[#a3e6351a] border border-[#a3e63533] px-2 py-0.5 rounded">
-            GPT-5.4
-          </span>
-        </div>
-        <button
-          onClick={onGenerate}
-          disabled={loading}
-          data-testid="ai-snapshot-generate-btn"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-[#1f1f1f] text-[#a1a1aa] hover:text-white hover:border-[#333] transition-colors disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          {summaries ? 'Refresh' : 'Generate'}
-        </button>
-      </div>
-
-      {!summaries && !loading && (
-        <div className="card-modern rounded-lg p-8 text-center">
-          <div className="text-sm text-[#a1a1aa] max-w-md mx-auto">
-            Get a one-sentence read on each tracked account — engagement, growth, momentum — powered by GPT-5.4.
-          </div>
-        </div>
-      )}
-
-      {loading && (
-        <div className="card-modern rounded-lg p-8 flex items-center justify-center gap-2 text-sm text-[#a1a1aa]">
-          <Loader2 className="w-4 h-4 animate-spin" /> Analysing {accounts.length} account{accounts.length === 1 ? '' : 's'}…
-        </div>
-      )}
-
-      {summaries && summaries.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {summaries.map((s) => (
-            <div
-              key={s.username}
-              data-testid={`ai-summary-${s.username}`}
-              className="card-neu rounded-lg p-5 border-l-2 border-l-[#a3e635]/40"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <span className="font-mono text-sm font-medium text-white">@{s.username}</span>
-                <div className="ml-auto flex items-center gap-3 text-[10px] font-mono text-[#525252]">
-                  <span>{s.engagement_rate}% eng</span>
-                  {s.follower_change_7d != null && (
-                    <span className={s.follower_change_7d > 0 ? 'text-[#22c55e]' : s.follower_change_7d < 0 ? 'text-[#dc2626]' : 'text-[#525252]'}>
-                      {s.follower_change_7d > 0 ? '+' : ''}{s.follower_change_7d}f
-                    </span>
-                  )}
-                </div>
-              </div>
-              <p className="text-sm text-[#d4d4d8] leading-relaxed">{s.summary}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-
-const CompareDialog = ({ open, onClose, data, loading, error }) => {
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-3xl w-[95vw] glass-strong border border-[#1f1f1f] p-0 overflow-hidden">
-        <DialogTitle className="sr-only">AI account comparison</DialogTitle>
-        <DialogDescription className="sr-only">
-          Head-to-head comparison of tracked Instagram accounts
-        </DialogDescription>
-        <div className="flex flex-col max-h-[85vh]">
-          <div className="p-5 border-b border-[#1a1a1a] flex items-center gap-3 shrink-0">
-            <GitCompareArrows className="w-4 h-4 text-white" strokeWidth={1.75} />
-            <div className="flex-1">
-              <div className="text-base font-semibold text-white">Head-to-head comparison</div>
-              <div className="text-[11px] text-[#737373] font-mono">GPT-5.4 · cached 1h</div>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              data-testid="compare-close-btn"
-              className="text-[#737373] hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 min-h-0">
-            {loading && (
-              <div className="flex items-center gap-2 text-sm text-[#a1a1aa] py-6" data-testid="compare-loading">
-                <Loader2 className="w-4 h-4 animate-spin" /> Comparing accounts…
-              </div>
-            )}
-            {error && <div className="text-sm text-[#dc2626]">{error}</div>}
-            {data && (
-              <>
-                {/* Metrics rail */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
-                  {data.accounts.map((a) => (
-                    <div key={a.username} className="p-3 bg-[#0f0f0f] border border-[#1a1a1a] rounded-md">
-                      <div className="font-mono text-xs font-medium text-white mb-2 truncate">@{a.username}</div>
-                      <div className="text-[10px] text-[#525252] font-mono">Followers</div>
-                      <div className="font-mono text-sm text-white mb-1">{a.followers.toLocaleString()}</div>
-                      <div className="text-[10px] text-[#525252] font-mono">Engagement</div>
-                      <div className="font-mono text-sm text-white">{a.engagement_rate}%</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div
-                  data-testid="compare-content"
-                  className="text-sm text-[#d4d4d8] leading-relaxed space-y-3"
-                  dangerouslySetInnerHTML={{
-                    __html: DOMPurify.sanitize(
-                      (data.comparison || '').replace(
-                        /\*\*(.*?)\*\*/g,
-                        '<span class="block font-mono text-white uppercase tracking-wide text-[11px] mt-4 mb-1">$1</span>'
-                      ),
-                      { ALLOWED_TAGS: ['span', 'strong', 'em', 'br'], ALLOWED_ATTR: ['class'] }
-                    )
-                  }}
-                />
-              </>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 };
 

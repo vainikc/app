@@ -31,11 +31,11 @@ const ActivityFeed = () => {
   const [profiles, setProfiles] = useState({});
   const [activities, setActivities] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selectedFilter, setSelectedFilter] = useState('all');
   const [openPost, setOpenPost] = useState(null); // { post, username, profile }
 
   useEffect(() => {
     fetchAll();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchAll = async () => {
@@ -69,10 +69,6 @@ const ActivityFeed = () => {
     }
   };
 
-  const visible = selectedFilter === 'all'
-    ? trackedAccounts
-    : trackedAccounts.filter(a => a.username === selectedFilter);
-
   return (
     <div className="p-10 max-w-[1600px]">
       <div className="mb-8 pl-8 hero-crosshair">
@@ -92,52 +88,21 @@ const ActivityFeed = () => {
           <p className="text-sm text-[#a1a1aa]">Track a profile to see activity here.</p>
         </div>
       ) : (
-        <>
-          {/* Filter chips */}
-          <div className="flex gap-2 mb-8 flex-wrap">
-            <button
-              onClick={() => setSelectedFilter('all')}
-              data-testid="filter-all"
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${
-                selectedFilter === 'all'
-                  ? 'bg-white text-black border-white'
-                  : 'bg-transparent text-[#a1a1aa] border-[#1f1f1f] hover:text-white hover:border-[#333]'
-              }`}
-            >
-              All ({trackedAccounts.length})
-            </button>
-            {trackedAccounts.map((a) => (
-              <button
-                key={a.username}
-                data-testid={`filter-${a.username}`}
-                onClick={() => setSelectedFilter(a.username)}
-                className={`px-3 py-1.5 rounded-md text-xs font-mono transition-colors border ${
-                  selectedFilter === a.username
-                    ? 'bg-white text-black border-white'
-                    : 'bg-transparent text-[#a1a1aa] border-[#1f1f1f] hover:text-white hover:border-[#333]'
-                }`}
-              >
-                @{a.username}
-              </button>
-            ))}
-          </div>
-
-          <div className="space-y-16">
-            {visible.map((account) => {
-              const profile = profiles[account.username];
-              const posts = activities[account.username];
-              return (
-                <MiniProfile
-                  key={account.id}
-                  account={account}
-                  profile={profile}
-                  posts={posts}
-                  onPostClick={(post) => setOpenPost({ post, username: account.username, profile })}
-                />
-              );
-            })}
-          </div>
-        </>
+        <div className="space-y-12">
+          {trackedAccounts.map((account) => {
+            const profile = profiles[account.username];
+            const posts = activities[account.username];
+            return (
+              <MiniProfile
+                key={account.id}
+                account={account}
+                profile={profile}
+                posts={posts}
+                onPostClick={(post) => setOpenPost({ post, username: account.username, profile })}
+              />
+            );
+          })}
+        </div>
       )}
 
       <PostDialog
@@ -155,59 +120,54 @@ const ActivityFeed = () => {
 const MiniProfile = ({ account, profile, posts, onPostClick }) => {
   return (
     <section data-testid={`activity-section-${account.username}`}>
-      {/* IG-style header */}
-      <div className="flex items-center gap-8 md:gap-12 pb-6 border-b border-[#1a1a1a]">
+      {/* Compact IG-style header */}
+      <div className="flex items-center gap-6 pb-4 border-b border-[#1a1a1a]">
         {profile?.profile_pic ? (
           <img
             src={proxyImage(profile.profile_pic)}
             alt={account.username}
-            className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border border-[#262626] shrink-0"
+            className="w-16 h-16 rounded-full object-cover border border-[#262626] shrink-0"
             onError={(e) => { e.target.style.display = 'none'; }}
           />
         ) : (
-          <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-[#141414] border border-[#262626] flex items-center justify-center shrink-0">
-            <span className="text-[#a1a1aa] font-mono text-2xl">
+          <div className="w-16 h-16 rounded-full bg-[#141414] border border-[#262626] flex items-center justify-center shrink-0">
+            <span className="text-[#a1a1aa] font-mono text-lg">
               {account.username.charAt(0).toUpperCase()}
             </span>
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <a
               href={`https://www.instagram.com/${account.username}/`}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-xl md:text-2xl font-medium text-white hover:text-[#e5e5e5]"
+              className="font-mono text-base font-medium text-white hover:text-[#e5e5e5]"
             >
               @{account.username}
             </a>
-            {profile?.is_verified && <ShieldCheck className="w-4 h-4 text-white" strokeWidth={2} />}
-            {profile?.is_private && <Lock className="w-3.5 h-3.5 text-[#737373]" />}
+            {profile?.is_verified && <ShieldCheck className="w-3.5 h-3.5 text-[#a3e635]" strokeWidth={2} />}
+            {profile?.is_private && <Lock className="w-3 h-3 text-[#737373]" />}
           </div>
-          <div className="flex items-center gap-6 md:gap-8 mb-3 flex-wrap">
+          <div className="flex items-center gap-4 mb-1 flex-wrap">
             <Stat label="posts" value={formatNumber(profile?.posts ?? 0)} />
             <Stat label="followers" value={formatNumber(profile?.followers ?? 0)} />
             <Stat label="following" value={formatNumber(profile?.following ?? 0)} />
           </div>
           {profile?.full_name && (
-            <div className="text-sm font-medium text-white mb-0.5">{profile.full_name}</div>
-          )}
-          {profile?.bio && (
-            <div className="text-xs text-[#a1a1aa] whitespace-pre-line leading-relaxed max-w-xl">
-              {profile.bio}
-            </div>
+            <div className="text-xs text-[#a1a1aa] truncate">{profile.full_name}</div>
           )}
         </div>
       </div>
 
-      {/* Post grid */}
-      <div className="mt-6">
+      {/* Post grid — 6 columns for tighter density */}
+      <div className="mt-4">
         {!posts ? (
-          <div className="text-xs text-[#737373] py-8 text-center">Loading posts…</div>
+          <div className="text-xs text-[#737373] py-6 text-center">Loading posts…</div>
         ) : posts.length === 0 ? (
-          <div className="text-xs text-[#737373] py-8 text-center">No recent posts.</div>
+          <div className="text-xs text-[#737373] py-6 text-center">No recent posts.</div>
         ) : (
-          <div className="grid grid-cols-3 gap-1 md:gap-2">
+          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-6 lg:grid-cols-8 gap-1">
             {posts.map((post, idx) => (
               <PostTile
                 key={`${account.username}-${idx}`}
@@ -224,9 +184,9 @@ const MiniProfile = ({ account, profile, posts, onPostClick }) => {
 };
 
 const Stat = ({ label, value }) => (
-  <div className="flex items-baseline gap-1.5">
-    <span className="font-mono text-lg md:text-xl font-semibold text-white">{value}</span>
-    <span className="text-xs text-[#a1a1aa]">{label}</span>
+  <div className="flex items-baseline gap-1">
+    <span className="font-mono text-sm font-semibold text-white">{value}</span>
+    <span className="text-[10px] text-[#a1a1aa]">{label}</span>
   </div>
 );
 

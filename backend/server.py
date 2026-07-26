@@ -47,15 +47,16 @@ app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Auth dependency (JWT-based) - protects all /api routes except auth + image-proxy
+# Auth dependency (available but no longer applied globally - kept for future re-enable)
 current_user_dep = get_current_user_dep(db)
 
 # Public router: no auth required (auth endpoints, image proxy, health)
 public_router = APIRouter(prefix="/api")
 public_router.include_router(build_auth_router(db))
 
-# Protected router: every route requires a valid JWT
-api_router = APIRouter(prefix="/api", dependencies=[Depends(current_user_dep)])
+# Protected router — currently OPEN per user request ("remove auth for now").
+# To re-enable auth, add: dependencies=[Depends(current_user_dep)]
+api_router = APIRouter(prefix="/api")
 
 
 class TrackedAccount(BaseModel):
@@ -390,14 +391,17 @@ async def get_following_list(request: Request, username: str, limit: int = Query
 
 @api_router.get("/profile/{username}/mutuals")
 @limiter.limit("10/minute")
-async def get_mutuals(request: Request, username: str, limit: int = Query(200, ge=1, le=1000)):
+async def get_mutuals(request: Request, username: str, limit: int = Query(200, ge=1, le=1000), since_days: int = Query(0, ge=0, le=365)):
     """
-    Mutual connections: intersection of who follows @username and who @username follows back.
-    Both lists are fetched concurrently and cached via the existing connection-list cache.
+    Mutual connections: accounts that follow @username AND are followed back.
+    When `since_days > 0`, filters to accounts that became mutuals in the given
+    window — i.e. intersection of `smart_recent` from followers and following
+    for that period. When `since_days == 0`, returns the full current-list intersection.
     """
     username = username.strip().lstrip('@').lower()
 
-    # Fetch both lists in parallel — huge win on latency.
+    # Fetch full lists in parallel — used both for the "all mutuals" answer and as
+    # source data for _snapshot_connections when since_days is set.
     followers_task = fetch_connection_list(username, "followers", limit)
     following_task = fetch_connection_list(username, "following", limit)
     followers, following = await asyncio.gather(followers_task, following_task)
@@ -410,20 +414,47 @@ async def get_mutuals(request: Request, username: str, limit: int = Query(200, g
             "followers_sampled": 0,
             "following_sampled": 0,
             "quota_exhausted": True,
+            "since_days": since_days,
+            "mode": "none",
         }
 
-    # Union-by-username; keep the richest detail we've seen for each user.
+    if since_days > 0:
+        # Time-filtered mutuals: reuse the same diff logic that powers the other tabs.
+        followers_snap = await _snapshot_connections(username, "followers", limit, since_days)
+        following_snap = await _snapshot_connections(username, "following", limit, since_days)
+
+        recent_followers = {u.get('username'): u for u in (followers_snap.get('smart_recent') or []) if u.get('username')}
+        recent_following = {u.get('username'): u for u in (following_snap.get('smart_recent') or []) if u.get('username')}
+        mutual_usernames = recent_followers.keys() & recent_following.keys()
+
+        mutuals = [recent_followers.get(u) or recent_following.get(u) for u in mutual_usernames]
+        mutuals.sort(key=lambda x: (x.get('username') or '').lower())
+
+        # The mode is downgraded to whichever side has the weakest baseline —
+        # exact > partial > heuristic > none. Keep the user honest about certainty.
+        followers_mode = followers_snap.get('smart_recent_mode', 'none')
+        following_mode = following_snap.get('smart_recent_mode', 'none')
+        precedence = ['exact', 'partial', 'approximate', 'heuristic', 'none']
+        weakest = max(precedence.index(followers_mode) if followers_mode in precedence else 4,
+                      precedence.index(following_mode) if following_mode in precedence else 4)
+        combined_mode = precedence[weakest]
+
+        return {
+            "username": username,
+            "mutuals": mutuals,
+            "mutual_count": len(mutuals),
+            "followers_sampled": len(followers),
+            "following_sampled": len(following),
+            "quota_exhausted": False,
+            "since_days": since_days,
+            "mode": combined_mode,
+        }
+
+    # since_days == 0 → full current intersection (unchanged behavior)
     follower_map = {u['username']: u for u in followers if u.get('username')}
     following_map = {u['username']: u for u in following if u.get('username')}
     mutual_usernames = follower_map.keys() & following_map.keys()
-
-    mutuals = []
-    for u in mutual_usernames:
-        details = follower_map.get(u) or following_map.get(u)
-        if details:
-            mutuals.append(details)
-
-    # Sort alphabetically for stable display.
+    mutuals = [follower_map.get(u) or following_map.get(u) for u in mutual_usernames]
     mutuals.sort(key=lambda x: (x.get('username') or '').lower())
 
     return {
@@ -433,6 +464,8 @@ async def get_mutuals(request: Request, username: str, limit: int = Query(200, g
         "followers_sampled": len(followers),
         "following_sampled": len(following),
         "quota_exhausted": False,
+        "since_days": 0,
+        "mode": "all",
     }
 
 

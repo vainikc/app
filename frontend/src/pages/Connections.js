@@ -30,7 +30,7 @@ const TIME_RANGES = [
   { value: '0', label: 'Since last check' },
 ];
 
-const Connections = () => {
+const Connections = ({ embedded = false }) => {
   const [accounts, setAccounts] = useState([]);
   const [selected, setSelected] = useState('');
   const [tab, setTab] = useState('following');
@@ -42,6 +42,7 @@ const Connections = () => {
 
   useEffect(() => {
     fetchAccounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -71,7 +72,8 @@ const Connections = () => {
         setFollowingData(res.data);
         if (res.data.quota_exhausted) toast.error('Apify quota exhausted');
       } else if (tab === 'mutuals') {
-        const res = await axios.get(`${API}/profile/${selected}/mutuals?limit=200`);
+        // Mutuals now respects the same time range as the other tabs.
+        const res = await axios.get(`${API}/profile/${selected}/mutuals?limit=200&since_days=${timeRange}`);
         setMutualsData(res.data);
         if (res.data.quota_exhausted) toast.error('Apify quota exhausted');
       }
@@ -88,19 +90,34 @@ const Connections = () => {
   ];
 
   const currentData = tab === 'followers' ? followersData : tab === 'following' ? followingData : mutualsData;
-  const showTimeRange = tab === 'followers' || tab === 'following';
+  const showTimeRange = true; // all three tabs use the time range now
   const periodLabel = TIME_RANGES.find(r => r.value === timeRange)?.label.toLowerCase() || 'past week';
 
   return (
-    <div className="p-10 max-w-[1600px]">
-      <div className="mb-8 pl-8 hero-crosshair">
-        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-white mb-3">
-          Connections
-        </h1>
-        <p className="text-[15px] text-[#a1a1aa] max-w-2xl leading-relaxed">
-          Who joined or left in a chosen time window. Only accounts within the range are shown.
-        </p>
-      </div>
+    <div className={embedded ? "" : "p-10 max-w-[1600px]"}>
+      {!embedded && (
+        <div className="mb-8 pl-8 hero-crosshair">
+          <h1 className="text-5xl sm:text-6xl font-bold tracking-tight text-white mb-3">
+            Connections
+          </h1>
+          <p className="text-[15px] text-[#a1a1aa] max-w-2xl leading-relaxed">
+            Who joined or left in a chosen time window. Only accounts within the range are shown.
+          </p>
+        </div>
+      )}
+      {embedded && (
+        <div className="mb-6 pl-8 hero-crosshair">
+          <div className="inline-block text-[10px] font-mono uppercase tracking-[0.3em] text-[#a3e635] mb-2">
+            Connections Explorer
+          </div>
+          <h2 className="text-3xl font-bold tracking-tight text-white">
+            Followers · Following · Mutuals
+          </h2>
+          <p className="text-sm text-[#a1a1aa] mt-2 max-w-2xl">
+            Pick a case above (auto-selected) and a time window to inspect exactly who came in, left, or matched.
+          </p>
+        </div>
+      )}
 
       {accounts.length === 0 ? (
         <div className="card-modern rounded-lg p-16 text-center">
@@ -213,7 +230,7 @@ const Connections = () => {
           ) : tab === 'followers' ? (
             <FollowersView data={currentData} period={periodLabel} />
           ) : (
-            <MutualsView data={currentData} username={selected} />
+            <MutualsView data={currentData} username={selected} period={periodLabel} />
           )}
         </>
       )}
@@ -570,7 +587,7 @@ const QuotaExhausted = ({ type }) => (
 );
 
 
-const MutualsView = ({ data, username }) => {
+const MutualsView = ({ data, username, period }) => {
   if (data.quota_exhausted) {
     return (
       <div className="card-modern rounded-lg p-16 text-center">
@@ -581,11 +598,17 @@ const MutualsView = ({ data, username }) => {
   }
 
   const mutuals = data.mutuals || [];
+  const isFiltered = (data.since_days ?? 0) > 0;
+  const mode = data.mode || (isFiltered ? 'heuristic' : 'all');
 
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-        <StatCard label="Mutuals" value={data.mutual_count?.toLocaleString?.() ?? mutuals.length} tone="pos" />
+        <StatCard
+          label={isFiltered ? `New mutuals in ${period}` : 'Total mutuals'}
+          value={data.mutual_count?.toLocaleString?.() ?? mutuals.length}
+          tone="pos"
+        />
         <StatCard label="Followers sampled" value={(data.followers_sampled ?? 0).toLocaleString()} />
         <StatCard label="Following sampled" value={(data.following_sampled ?? 0).toLocaleString()} />
       </div>
@@ -594,23 +617,37 @@ const MutualsView = ({ data, username }) => {
         <div className="flex items-start gap-3">
           <Info className="w-3.5 h-3.5 text-[#a3e635] mt-0.5 shrink-0" />
           <div className="text-xs text-[#d4d4d8]">
-            Mutuals are accounts that both follow @{username} <em>and</em> are followed back by @{username}.
-            We sample up to {data.followers_sampled} from each side to find overlaps —
-            for accounts with &gt;200 followers the true mutual count may be higher than what's shown.
+            {isFiltered ? (
+              <>
+                Showing accounts that became mutual with @{username} in the <strong className="text-[#a3e635]">{period}</strong> —
+                the intersection of "recently followed" and "new followers" for that window.
+                Certainty label: <span className="font-mono text-[#a3e635] uppercase text-[10px]">{mode}</span>.
+              </>
+            ) : (
+              <>
+                Full-intersection view: accounts that both follow @{username} <em>and</em> are followed back.
+                We sample up to {data.followers_sampled} from each side; for accounts with &gt;200 followers the true count may be higher.
+              </>
+            )}
           </div>
         </div>
       </div>
 
       {mutuals.length === 0 ? (
         <div className="card-modern rounded-lg p-12 text-center">
-          <div className="text-lg text-white mb-2">No mutuals in the sample</div>
-          <p className="text-sm text-[#a1a1aa]">No overlap detected between followers and following.</p>
+          <div className="text-lg text-white mb-2">
+            {isFiltered ? `No new mutuals in the ${period}` : 'No mutuals in the sample'}
+          </div>
+          <p className="text-sm text-[#a1a1aa]">
+            {isFiltered ? 'Try a wider time range.' : 'No overlap detected between followers and following.'}
+          </p>
         </div>
       ) : (
         <div className="card-modern rounded-lg p-6">
           <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <Handshake className="w-4 h-4 text-[#a3e635]" strokeWidth={1.75} />
             {mutuals.length} mutual{mutuals.length === 1 ? '' : 's'}
+            {isFiltered && <span className="text-xs font-normal text-[#737373]">· {period}</span>}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {mutuals.map((u) => (
