@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "buildCommand": "cd frontend && yarn install && yarn build",
   "outputDirectory": "frontend/build",
   "installCommand": "echo 'install handled in buildCommand'",
@@ -11,7 +12,8 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" }
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [
     { "path": "/api/cron/snapshot", "schedule": "0 6 * * *" }
