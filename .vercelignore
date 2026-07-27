@@ -1,0 +1,9 @@
+.emergent/
+memory/
+tests/
+test_reports/
+backend/tests/
+frontend/node_modules/
+frontend/build/
+*.md
+!README.md

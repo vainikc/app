@@ -11,8 +11,7 @@ from pydantic import BaseModel, Field, ConfigDict
 import uuid
 from datetime import datetime, timezone, timedelta
 import httpx
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from llm import LlmChat, UserMessage
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -29,19 +28,21 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ['MONGO_URL']
-mongo_client = AsyncIOMotorClient(mongo_url)
+# Small pool: each serverless instance handles one request at a time, and a
+# large pool exhausts Atlas connection limits once Vercel scales out.
+mongo_client = AsyncIOMotorClient(mongo_url, maxPoolSize=5, serverSelectionTimeoutMS=10000)
 db = mongo_client[os.environ['DB_NAME']]
 
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+# Emergent's LLM proxy key no longer exists off-platform; OPENAI_API_KEY is the
+# replacement. The old name is still read so nothing breaks mid-migration.
+EMERGENT_LLM_KEY = os.environ.get('OPENAI_API_KEY') or os.environ.get('EMERGENT_LLM_KEY')
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# Rate limiter (per IP)
+# Rate limiter (per IP). Note: in-memory, so on serverless the quota is
+# per-instance rather than global.
 limiter = Limiter(key_func=get_remote_address)
-
-# Scheduler (declared before startup handler)
-scheduler = AsyncIOScheduler(timezone="UTC")
 
 app = FastAPI()
 app.state.limiter = limiter
@@ -927,15 +928,55 @@ async def search_profile(request: Request, q: str):
         return []
 
 
-# ========== Scheduler ==========
+# ========== Scheduled snapshots ==========
+#
+# On Emergent this ran in-process via APScheduler. Serverless functions are torn
+# down between requests, so there is no long-lived process to hold a scheduler.
+# The same work is now driven by Vercel Cron hitting /api/cron/snapshot.
+#
+# A cron invocation is also time-boxed by the platform's max function duration,
+# so instead of walking every account in one pass we take the accounts whose
+# snapshot is stalest and stop before the budget runs out. Successive runs
+# rotate naturally through the rest.
 
-async def snapshot_all_tracked_accounts():
-    """Snapshot follower counts + following LIST (for recency diff) for all tracked accounts."""
+CRON_TIME_BUDGET_SECONDS = float(os.environ.get('CRON_TIME_BUDGET_SECONDS', '240'))
+
+
+async def _accounts_by_staleness(limit: int = 200):
+    """Tracked accounts ordered by oldest profile snapshot first."""
+    accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(limit)
+    scored = []
+    for acc in accounts:
+        last = await db.follower_snapshots.find_one(
+            {"username": acc['username']}, {"_id": 0, "timestamp": 1},
+            sort=[("timestamp", -1)]
+        )
+        scored.append((last.get("timestamp", "") if last else "", acc))
+    scored.sort(key=lambda pair: pair[0])
+    return [acc for _, acc in scored]
+
+
+async def snapshot_all_tracked_accounts(time_budget: float = None):
+    """Snapshot follower counts + following LIST (for recency diff) for tracked accounts."""
+    deadline = None
+    if time_budget is None:
+        time_budget = CRON_TIME_BUDGET_SECONDS
+    if time_budget > 0:
+        deadline = asyncio.get_event_loop().time() + time_budget
+
+    processed, skipped = 0, 0
     try:
-        accounts = await db.tracked_accounts.find({}, {"_id": 0}).to_list(200)
+        accounts = await _accounts_by_staleness()
         logger.info(f"[Scheduler] Running snapshot for {len(accounts)} tracked accounts")
         for acc in accounts:
             username = acc['username']
+            if deadline is not None and asyncio.get_event_loop().time() > deadline:
+                skipped = len(accounts) - processed
+                logger.info(
+                    f"[Scheduler] Time budget reached; {skipped} account(s) deferred to the next run"
+                )
+                break
+            processed += 1
             try:
                 # Profile counts snapshot (cheap - single Apify call)
                 clear_profile_cache(username)
@@ -975,28 +1016,56 @@ async def snapshot_all_tracked_accounts():
                 logger.error(f"[Scheduler] Failed to snapshot @{username}: {e}")
     except Exception as e:
         logger.error(f"[Scheduler] snapshot_all_tracked_accounts failed: {e}")
+        return {"processed": processed, "deferred": skipped, "error": str(e)[:200]}
+    return {"processed": processed, "deferred": skipped}
+
+
+def _cron_authorized(request: Request) -> bool:
+    """Vercel Cron sends `Authorization: Bearer $CRON_SECRET`."""
+    secret = os.environ.get('CRON_SECRET')
+    if not secret:
+        # No secret configured: allow, but the endpoint is then world-callable.
+        logger.warning("[Cron] CRON_SECRET is not set — /api/cron/* is unauthenticated")
+        return True
+    header = request.headers.get('Authorization', '')
+    return header == f"Bearer {secret}"
+
+
+@public_router.post("/cron/snapshot")
+@public_router.get("/cron/snapshot")
+async def cron_snapshot(request: Request):
+    """Replaces the old in-process 6-hourly APScheduler job.
+
+    Wired to Vercel Cron in vercel.json. Idempotent and safe to re-run: the
+    per-account guards inside the snapshot decide what actually needs work.
+    """
+    if not _cron_authorized(request):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    await _ensure_seeded()
+    result = await snapshot_all_tracked_accounts()
+    return {"status": "ok", **(result or {})}
+
+
+# One-time-per-instance admin seeding + index creation. On Emergent this ran in
+# a startup hook; a serverless instance may serve many requests, so we guard it
+# with a module-level flag rather than paying for it on every call.
+_seeded = False
+
+
+async def _ensure_seeded():
+    global _seeded
+    if _seeded:
+        return
+    try:
+        await seed_admin_and_indexes(db)
+        _seeded = True
+    except Exception as e:
+        logger.error(f"[Startup] Seeding failed: {e}")
 
 
 @app.on_event("startup")
-async def start_scheduler():
-    await seed_admin_and_indexes(db)
-    scheduler.add_job(
-        snapshot_all_tracked_accounts,
-        'interval',
-        hours=6,
-        id='auto_snapshot',
-        replace_existing=True,
-        next_run_time=datetime.now(timezone.utc)
-    )
-    scheduler.start()
-    logger.info("[Scheduler] Started auto-snapshot job (every 6h)")
-
-
-@app.on_event("shutdown")
-async def shutdown_handler():
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-    mongo_client.close()
+async def on_startup():
+    await _ensure_seeded()
 
 
 # ========== Wire up ==========
